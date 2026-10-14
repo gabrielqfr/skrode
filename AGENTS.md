@@ -55,8 +55,8 @@ check to make it pass.
 
 ## Commits
 
-Conventional messages, `<type>(<scope>): <what>`, signed off for the DCO (`git commit -s`). Nothing
-is pushed until the project has its name. Implementers do not commit.
+Conventional messages, `<type>(<scope>): <what>`, signed off for the DCO (`git commit -s`). The GitHub
+repo is private; nothing goes public until the project's name is final. Implementers do not commit.
 
 ## Privacy
 
