@@ -12,7 +12,7 @@ without lowering quality, and to show that with a public benchmark.
 
 | Path | What it is |
 | --- | --- |
-| `router/` | The package. Empty until the worker loop lands: `llm.py`, `profiles.py`, `tools.py`, `worker.py`, then `worktree.py`, `acceptance.py`, `jobs.py`, then `server.py`, `cli.py` |
+| `router/` | The package. `benchtask.py` turns an eval task folder into `run_local_subagent` arguments for the bench. Coming with the worker loop: `llm.py`, `profiles.py`, `tools.py`, `worker.py`, then `worktree.py`, `acceptance.py`, `jobs.py`, then `server.py`, `cli.py` |
 | `tests/` | pytest. Tests never need a model server or the network: fake the HTTP endpoint |
 | `scripts/verify.sh` | The checks every change must pass, with bounded output |
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
