@@ -5,7 +5,10 @@ description = "Hand well-specified coding tasks from Claude Code to a local mode
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-dependencies = []
+dependencies = [
+    "jsonschema>=4.26.0",
+    "pyyaml>=6.0.3",
+]
 
 [dependency-groups]
 dev = [
