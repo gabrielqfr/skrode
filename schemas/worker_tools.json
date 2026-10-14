@@ -124,7 +124,7 @@
       "type": "function",
       "function": {
         "name": "grep",
-        "description": "Search tracked files with an extended regex, as git grep -nE. Returns at most 100 matching lines as path:line:text.",
+        "description": "Search the worktree's files, tracked and new but not ignored, with an extended regex, as git grep -nE --untracked. Returns at most 100 matching lines as path:line:text.",
         "parameters": {
           "type": "object",
           "additionalProperties": false,
