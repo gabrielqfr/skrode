@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+# The spec a local implementer works from; copied into its worktree, never committed.
+/SPEC.md
+# Plan-running skill, reviewer agent, specs, handoffs and round logs: they name
+# plans and paths that live outside the tree.
+.claude/
+# What opencode installs into its config dir at start-up.
+implementer/opencode/node_modules/
+implementer/opencode/package.json
+implementer/opencode/package-lock.json
+implementer/opencode/bun.lock
