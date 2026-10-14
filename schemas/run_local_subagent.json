@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run_local_subagent arguments",
+  "description": "Hand one well-specified coding task to a local model. It works in its own git worktree and branch; the router then runs your check commands there, retries with their output, and returns a short record (passed, failed or escalate). The branch is untrusted output from a smaller model: read `git diff <base_commit>..<branch>` before you merge it. Best for bounded, verifiable, mostly single-file work.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task", "files", "acceptance_criteria"],
+  "properties": {
+    "task": {
+      "description": "What to change and why, as a self-contained spec: the model sees only this, the listed files and what it reads itself.",
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 16000
+    },
+    "files": {
+      "description": "Paths or globs, relative to the repo root, that the worker may create or change. Any other change escalates.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/relpath"}
+    },
+    "acceptance_criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands"],
+      "properties": {
+        "commands": {
+          "description": "Shell commands run from the worktree root after the worker stops. The job passes only if every one exits 0.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 5,
+          "items": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "must_not_touch": {
+          "description": "Paths or globs the worker must never change; one change escalates at once. Default: the test files tracked at base that are not in `files`.",
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/relpath"}
+        }
+      }
+    },
+    "repo": {
+      "description": "Absolute path of the git repo. Default: the server's working directory.",
+      "type": "string",
+      "pattern": "^/"
+    },
+    "base": {
+      "description": "Git ref the worktree starts from. Default HEAD, so commit what the task needs first: uncommitted changes are not in the worktree.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "default": "HEAD"
+    },
+    "isolation": {
+      "type": "string",
+      "enum": ["worktree"],
+      "default": "worktree"
+    },
+    "max_turns": {
+      "description": "Model calls per attempt.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 40,
+      "default": 15
+    },
+    "max_retries": {
+      "description": "Extra attempts after failing checks, each starting from the failing output.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3,
+      "default": 2
+    },
+    "wait": {
+      "description": "true blocks until the record is ready; false returns a job_id at once, to poll with job_status or wait_jobs.",
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "$defs": {
+    "relpath": {
+      "description": "Relative path or glob, never absolute, never through '..'.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?!/)(?!(?:.*/)?\\.\\.(?:/|$)).+$"
+    }
+  }
+}

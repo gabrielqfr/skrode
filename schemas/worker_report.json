@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "worker report",
+  "description": "The worker's last reply, requested with response_format json_schema and no tools. Its summary and concerns go into the job record; its outcome can only make a job worse, never better.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome", "summary", "concerns"],
+  "properties": {
+    "outcome": {"type": "string", "enum": ["done", "blocked"]},
+    "summary": {
+      "description": "What changed and why, or what is missing when blocked. At most 150 words.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "concerns": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    }
+  }
+}

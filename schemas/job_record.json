@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "job record",
+  "description": "What run_local_subagent and job_status return. Serialised, it stays under 6000 characters (about 1.5k tokens): only the first failing check carries a tail, and full output stays in `logs`. docs/escalation.md defines each status and reason.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_version", "job_id", "status", "attempts", "turns", "files_changed", "diffstat",
+    "checks", "summary", "concerns", "branch", "base_commit", "model", "local_tokens", "wall_s",
+    "est_claude_tokens_avoided"
+  ],
+  "properties": {
+    "record_version": {"const": 1},
+    "job_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{5,39}$"},
+    "status": {"type": "string", "enum": ["passed", "failed", "escalate"]},
+    "reason": {
+      "description": "Why the job did not pass. Absent when it passed.",
+      "type": "string",
+      "enum": [
+        "must_not_touch", "outside_files", "schema_errors", "rewrite_loop", "worker_blocked",
+        "no_changes", "turn_limit", "checks_failed",
+        "bad_request", "endpoint", "timeout", "cancelled", "internal"
+      ]
+    },
+    "detail": {
+      "description": "One line on the reason, naming the path, tool or check involved.",
+      "type": "string",
+      "maxLength": 300
+    },
+    "attempts": {"type": "integer", "minimum": 0, "maximum": 4},
+    "turns": {"description": "Model calls across all attempts.", "type": "integer", "minimum": 0},
+    "files_changed": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "added", "removed"],
+        "properties": {
+          "path": {"$ref": "#/$defs/relpath"},
+          "added": {"type": "integer", "minimum": 0},
+          "removed": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "diffstat": {
+      "description": "The summary line of git diff --stat, or an empty string.",
+      "type": "string",
+      "maxLength": 200
+    },
+    "checks": {
+      "description": "The acceptance commands as run in the last attempt, in order.",
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "exit_code", "timed_out", "duration_s", "tail"],
+        "properties": {
+          "command": {"type": "string", "maxLength": 500},
+          "exit_code": {"type": "integer"},
+          "timed_out": {"type": "boolean"},
+          "duration_s": {"type": "number", "minimum": 0},
+          "tail": {
+            "description": "Last lines of output, for the first failing check only; otherwise empty.",
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "summary": {
+      "description": "The worker's own account, at most 150 words. Unverified.",
+      "type": "string",
+      "maxLength": 1000
+    },
+    "concerns": {
+      "description": "Up to three things the worker asks the reviewer to check. A passed record with concerns needs review before merging.",
+      "type": "array",
+      "maxItems": 3,
+      "items": {"type": "string", "maxLength": 200}
+    },
+    "branch": {
+      "description": "The job's branch, kept whenever it has changes, even on escalate. null when nothing changed.",
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9._/-]{1,100}$"
+    },
+    "base_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "model": {"description": "Served model alias, which is also the profile name.", "type": "string", "maxLength": 100},
+    "local_tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "completion"],
+      "properties": {
+        "prompt": {"type": "integer", "minimum": 0},
+        "completion": {"type": "integer", "minimum": 0},
+        "reasoning": {"type": "integer", "minimum": 0}
+      }
+    },
+    "wall_s": {"type": "number", "minimum": 0},
+    "est_claude_tokens_avoided": {"type": "integer", "minimum": 0},
+    "logs": {
+      "description": "Directory with the full check output and the transcript.",
+      "type": "string",
+      "maxLength": 300
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}},
+      "then": {
+        "not": {"required": ["reason"]},
+        "properties": {
+          "attempts": {"minimum": 1},
+          "files_changed": {"minItems": 1},
+          "branch": {"type": "string"},
+          "checks": {
+            "minItems": 1,
+            "items": {"properties": {"exit_code": {"const": 0}, "timed_out": {"const": false}}}
+          }
+        }
+      },
+      "else": {"required": ["reason", "detail"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "escalate"}}},
+      "then": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "must_not_touch", "outside_files", "schema_errors", "rewrite_loop",
+              "worker_blocked", "no_changes", "turn_limit", "checks_failed"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {
+        "properties": {
+          "reason": {"enum": ["bad_request", "endpoint", "timeout", "cancelled", "internal"]}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "relpath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?!/)(?!(?:.*/)?\\.\\.(?:/|$)).+$"
+    }
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "description": "The worker's five tools in OpenAI chat-completions form, sent as-is in `tools`. Each `parameters` is a JSON Schema that every call's arguments are validated against before the tool runs; a failure is a schema error (docs/escalation.md). The schemas stay plain (no $ref, no regex) because llama-server turns them into a grammar. Paths are relative to the worktree root; the tool layer refuses any path that resolves outside it, symlinks included.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "read",
+        "description": "Read a text file as numbered lines, one page at a time. The reply starts with [lines N-M of TOTAL].",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "offset": {
+              "description": "First line, from 1.",
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "limit": {
+              "description": "Lines to return.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 200
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "write",
+        "description": "Create a file or replace all of it. Use for new or small files; use edit for changes to an existing file.",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "content"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 200000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "edit",
+        "description": "Replace one exact occurrence of old with new. Fails if old matches nowhere or more than once; then include more surrounding lines.",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "old",
+            "new"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "old": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50000
+            },
+            "new": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "bash",
+        "description": "Run a shell command from the worktree root, without network. Output is cut to the last 12 KB of stdout and 4 KB of stderr.",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cmd"
+          ],
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "timeout_s": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300,
+              "default": 120
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "grep",
+        "description": "Search tracked files with an extended regex, as git grep -nE. Returns at most 100 matching lines as path:line:text.",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pattern"
+          ],
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "path": {
+              "description": "File or directory to search. Default: the whole worktree.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "glob": {
+              "description": "Only files matching this glob, such as *.py.",
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        }
+      }
+    }
+  ]
+}

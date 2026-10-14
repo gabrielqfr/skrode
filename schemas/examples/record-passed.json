@@ -1,0 +1,25 @@
+{
+  "record_version": 1,
+  "job_id": "j-20261014-a1b2c3",
+  "status": "passed",
+  "attempts": 2,
+  "turns": 13,
+  "files_changed": [
+    {"path": "router/slug.py", "added": 24, "removed": 3},
+    {"path": "tests/test_slug.py", "added": 41, "removed": 0}
+  ],
+  "diffstat": "2 files changed, 65 insertions(+), 3 deletions(-)",
+  "checks": [
+    {"command": "uv run pytest -q tests/test_slug.py", "exit_code": 0, "timed_out": false, "duration_s": 1.8, "tail": ""},
+    {"command": "uv run ruff check router tests", "exit_code": 0, "timed_out": false, "duration_s": 0.4, "tail": ""}
+  ],
+  "summary": "Added slugify() to router/slug.py: lowercases, folds accents with unicodedata NFKD, collapses runs of non-alphanumerics to one hyphen and trims hyphens at both ends. The first attempt kept trailing hyphens; the retry fixed the trim. Added tests/test_slug.py covering accents, empty input, repeated separators and a 60-character limit.",
+  "concerns": ["The 60-character limit cuts mid-word; the task did not say whether to cut at a hyphen."],
+  "branch": "local-agent/j-20261014-a1b2c3",
+  "base_commit": "da00a7f",
+  "model": "bonsai2-27b",
+  "local_tokens": {"prompt": 48210, "completion": 6120, "reasoning": 3904},
+  "wall_s": 412.5,
+  "est_claude_tokens_avoided": 18000,
+  "logs": ".git/hybrid-router/jobs/j-20261014-a1b2c3"
+}

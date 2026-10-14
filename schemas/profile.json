@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "model profile",
+  "description": "profiles/<served model alias>.yaml: per-request settings for one model family. `agent` is used for tool-using worker turns, `oneshot` for tasks with no tools. Every key is sent in the request body as written; `extra` is merged in last, for server-specific keys this schema does not name.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agent"],
+  "properties": {
+    "status": {
+      "description": "untested until a benchmark run used it.",
+      "type": "string",
+      "enum": ["tested", "untested"],
+      "default": "untested"
+    },
+    "sources": {
+      "description": "Where each value came from (model card, vendor README).",
+      "type": "array",
+      "items": {"type": "string", "pattern": "^https://"}
+    },
+    "notes": {"type": "string", "maxLength": 1000},
+    "agent": {"$ref": "#/$defs/mode"},
+    "oneshot": {"$ref": "#/$defs/mode"}
+  },
+  "$defs": {
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+        "top_p": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "top_k": {"type": "integer", "minimum": 0},
+        "min_p": {"type": "number", "minimum": 0, "maximum": 1},
+        "presence_penalty": {"type": "number", "minimum": -2, "maximum": 2},
+        "repeat_penalty": {"type": "number", "minimum": 0},
+        "max_tokens": {"type": "integer", "minimum": 256},
+        "reasoning_effort": {
+          "type": "string",
+          "enum": ["none", "minimal", "low", "medium", "high", "xhigh"]
+        },
+        "chat_template_kwargs": {"type": "object"},
+        "extra": {"type": "object"}
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "record_version": 1,
+  "job_id": "j-20261014-d4e5f6",
+  "status": "escalate",
+  "reason": "checks_failed",
+  "detail": "uv run pytest -q tests/test_parse.py still fails after 3 attempts (1 of 9 tests).",
+  "attempts": 3,
+  "turns": 31,
+  "files_changed": [
+    {"path": "router/parse.py", "added": 18, "removed": 7}
+  ],
+  "diffstat": "1 file changed, 18 insertions(+), 7 deletions(-)",
+  "checks": [
+    {
+      "command": "uv run pytest -q tests/test_parse.py",
+      "exit_code": 1,
+      "timed_out": false,
+      "duration_s": 2.3,
+      "tail": "FAILED tests/test_parse.py::test_quoted_comma - AssertionError: assert ['a', '\"b', 'c\"'] == ['a', 'b,c']\n1 failed, 8 passed in 0.52s"
+    }
+  ],
+  "summary": "Rewrote split_fields() in router/parse.py to handle quoted fields. Quoted commas are still split: the parser does not track whether it is inside quotes across the separator check.",
+  "concerns": [],
+  "branch": "local-agent/j-20261014-d4e5f6",
+  "base_commit": "da00a7f",
+  "model": "bonsai2-27b",
+  "local_tokens": {"prompt": 112400, "completion": 15830},
+  "wall_s": 1104.0,
+  "est_claude_tokens_avoided": 0,
+  "logs": ".git/hybrid-router/jobs/j-20261014-d4e5f6"
+}

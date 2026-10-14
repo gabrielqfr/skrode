@@ -18,8 +18,12 @@ without lowering quality, and to show that with a public benchmark.
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
 | `implementer/opencode/` | That implementer's opencode config and rules, loaded through `XDG_CONFIG_HOME` so no global opencode config applies |
 
-Coming with the spec work: `schemas/` (tool arguments, job record, profile), `prompts/worker.md`
-(the worker's system prompt), `profiles/` (one YAML per model family), `docs/escalation.md`.
+| `schemas/` | JSON Schemas: `run_local_subagent` arguments, the job record, the worker's five tools and its report, model profiles. `examples/` holds records the tests validate |
+| `prompts/worker.md` | Every message sent to the local model, one `## <name>` section each. Load it as written; never reword it in code |
+| `docs/escalation.md` | When a job ends `passed`, `escalate` or `failed`, and each reason's trigger |
+
+Coming with the worker loop: `profiles/` (one YAML per served model alias, checked against
+`schemas/profile.json`).
 
 ## Non-negotiables
 

@@ -1,0 +1,11 @@
+{
+  "task": "Add slugify(text: str, max_len: int = 60) -> str to router/slug.py: lowercase, fold accents, join words with single hyphens, no leading or trailing hyphen, at most max_len characters. Add tests in tests/test_slug.py.",
+  "files": ["router/slug.py", "tests/test_slug.py"],
+  "acceptance_criteria": {
+    "commands": ["uv run pytest -q tests/test_slug.py", "uv run ruff check router tests"],
+    "must_not_touch": ["tests/test_package.py"]
+  },
+  "max_turns": 15,
+  "max_retries": 2,
+  "wait": true
+}
