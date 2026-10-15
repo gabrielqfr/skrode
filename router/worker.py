@@ -8,7 +8,7 @@ import json
 import re
 import sys
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
 from typing import Protocol
@@ -61,9 +61,12 @@ class WorkerResult:
     tokens: dict[str, int]    # {"prompt": n, "completion": n}, summed over every call
     report: dict | None       # the valid worker report, or None
     report_error: str         # why report is None after a report call; "" otherwise
+    messages: list[dict] = field(default_factory=list)  # the conversation at the stop
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        data = asdict(self)
+        del data["messages"]
+        return data
 
 
 def load_prompts(path: Path = PROMPTS_PATH) -> dict[str, str]:
@@ -131,6 +134,11 @@ def _guard(bad_calls: int, writes: dict[str, int]) -> tuple[str, str] | None:
     return None
 
 
+def _arguments_text(arguments: object) -> str:
+    text = arguments if isinstance(arguments, str) else json.dumps(arguments, ensure_ascii=False)
+    return text[:LOG_TEXT_LIMIT]
+
+
 def _log(log: Path | None, event: dict) -> None:
     if log is None:
         return
@@ -148,14 +156,18 @@ def run_worker(
     prompts: dict[str, str] | None = None,
     narrated_markers: tuple[str, ...] = (),
     log: Path | None = None,
+    history: list[dict] | None = None,
 ) -> WorkerResult:
     if prompts is None:
         prompts = load_prompts()
     max_turns = args.get("max_turns", DEFAULT_MAX_TURNS)
-    history = [
-        {"role": "system", "content": prompts["system"]},
-        {"role": "user", "content": task_message(prompts, args)},
-    ]
+    if history is None:
+        messages = [
+            {"role": "system", "content": prompts["system"]},
+            {"role": "user", "content": task_message(prompts, args)},
+        ]
+    else:
+        messages = list(history)
     turns = 0
     bad_calls = 0
     tokens: dict[str, int] = {"prompt": 0, "completion": 0}
@@ -169,7 +181,7 @@ def run_worker(
             detail = f"{max_turns} turns"
             break
         try:
-            reply = client.chat(build_body(model, params, history))
+            reply = client.chat(build_body(model, params, messages))
         except LLMError as error:
             stop = "endpoint"
             detail = str(error)[:200]
@@ -198,7 +210,7 @@ def run_worker(
 
         if reply.finish_reason == "length":
             bad_calls += 1
-            history.append(
+            messages.append(
                 {"role": "user", "content": render(prompts, "correction.length")}
             )
             guard = _guard(bad_calls, write_counts)
@@ -209,8 +221,8 @@ def run_worker(
 
         if not calls and is_narrated(content, narrated_markers):
             bad_calls += 1
-            history.append({"role": "assistant", "content": content})
-            history.append(
+            messages.append({"role": "assistant", "content": content})
+            messages.append(
                 {"role": "user", "content": render(prompts, "correction.narrated")}
             )
             guard = _guard(bad_calls, write_counts)
@@ -220,15 +232,16 @@ def run_worker(
             continue
 
         if not calls:
-            history.append({"role": "assistant", "content": content})
+            messages.append({"role": "assistant", "content": content})
             stop = "finished"
             detail = ""
             break
 
-        history.append({"role": "assistant", "content": content, "tool_calls": calls})
+        messages.append({"role": "assistant", "content": content, "tool_calls": calls})
         for i, call in enumerate(calls):
             name = call.get("function", {}).get("name", "")
             arguments = call.get("function", {}).get("arguments", "")
+            arguments_text = _arguments_text(arguments)
             result = workspace.run(name, arguments)
             _log(
                 log,
@@ -236,6 +249,7 @@ def run_worker(
                     "event": "tool",
                     "turn": turns,
                     "name": name,
+                    "arguments": arguments_text,
                     "outcome": result.outcome.value,
                     "text": result.text[:LOG_TEXT_LIMIT],
                 },
@@ -263,7 +277,7 @@ def run_worker(
                 )
             else:
                 reply_text = result.text
-            history.append(
+            messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": call.get("id") or f"call_{turns}_{i}",
@@ -289,7 +303,7 @@ def run_worker(
                 build_body(
                     model,
                     params,
-                    [*history, {"role": "user", "content": prompts["report"]}],
+                    [*messages, {"role": "user", "content": prompts["report"]}],
                     report=True,
                 )
             )
@@ -331,6 +345,7 @@ def run_worker(
         tokens=tokens,
         report=report,
         report_error=report_error,
+        messages=messages,
     )
 
 

@@ -693,7 +693,7 @@ def test_log_events(tmp_path):
         "content",
         "tool_calls",
     }
-    tool_keys = {"event", "turn", "name", "outcome", "text"}
+    tool_keys = {"event", "turn", "name", "arguments", "outcome", "text"}
     report_keys = {
         "event",
         "finish_reason",
@@ -708,6 +708,7 @@ def test_log_events(tmp_path):
     assert set(events[3]) == report_keys
     assert events[1]["name"] == "write"
     assert events[1]["outcome"] == "ok"
+    assert events[1]["arguments"] == json.dumps({"path": "a.py", "content": "x = 2\n"})
 
 
 def test_log_cuts_long_content(tmp_path):
@@ -831,3 +832,218 @@ def test_cli_bad_base_url(tmp_path, capsys):
     )
     assert code == 2
     assert capsys.readouterr().err.startswith("bad base url: ")
+
+
+def test_log_cuts_long_arguments(tmp_path):
+    ws = _ws(tmp_path)
+    write_reply = _reply(
+        "",
+        tool_calls=[_call("write", path="a.py", content="y" * 5000)],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([write_reply, done_reply, report_reply])
+    log = tmp_path / "run.jsonl"
+
+    run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        log=log,
+    )
+
+    events = [
+        json.loads(line)
+        for line in log.read_text(encoding="utf-8").splitlines()
+    ]
+    event = next(e for e in events if e["event"] == "tool")
+    assert len(event["arguments"]) == LOG_TEXT_LIMIT
+    assert (
+        event["arguments"]
+        == json.dumps({"path": "a.py", "content": "y" * 5000})[:LOG_TEXT_LIMIT]
+    )
+
+
+def test_log_dict_arguments(tmp_path):
+    ws = _ws(tmp_path)
+    read_call = {
+        "id": "call_read",
+        "function": {"name": "read", "arguments": {"path": "a.py"}},
+    }
+    read_reply = _reply(
+        "",
+        tool_calls=[read_call],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([read_reply, done_reply, report_reply])
+    log = tmp_path / "run.jsonl"
+
+    run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        log=log,
+    )
+
+    events = [
+        json.loads(line)
+        for line in log.read_text(encoding="utf-8").splitlines()
+    ]
+    event = next(e for e in events if e["event"] == "tool")
+    assert event["arguments"] == json.dumps({"path": "a.py"}, ensure_ascii=False)
+    assert event["outcome"] == "ok"
+
+
+def test_messages_end_before_report(tmp_path):
+    ws = _ws(tmp_path)
+    write_reply = _reply(
+        "",
+        tool_calls=[_call("write", path="a.py", content="x = 2\n")],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([write_reply, done_reply, report_reply])
+
+    result = run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+    )
+
+    prompts = load_prompts()
+    assert result.messages[0] == {"role": "system", "content": prompts["system"]}
+    assert result.messages[1] == {
+        "role": "user",
+        "content": task_message(prompts, _args()),
+    }
+    assert result.messages[-1] == {"role": "assistant", "content": "done"}
+    assert len(result.messages) == 5
+    assert not any(
+        message["content"] == prompts["report"] for message in result.messages
+    )
+
+
+def test_to_dict_leaves_out_messages(tmp_path):
+    ws = _ws(tmp_path)
+    write_reply = _reply(
+        "",
+        tool_calls=[_call("write", path="a.py", content="x = 2\n")],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([write_reply, done_reply, report_reply])
+
+    result = run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+    )
+
+    assert "messages" not in result.to_dict()
+    assert result.to_dict()["stop"] == "finished"
+
+
+def test_history_continues_the_conversation(tmp_path):
+    ws = _ws(tmp_path)
+    write_reply = _reply(
+        "",
+        tool_calls=[_call("write", path="a.py", content="x = 2\n")],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    first_client = FakeClient([write_reply, done_reply, report_reply])
+
+    first = run_worker(
+        _args(),
+        ws,
+        first_client,
+        model="local",
+        params={"temperature": 1.0},
+    )
+
+    retry = [*first.messages, {"role": "user", "content": "The checks failed. Fix it."}]
+    before = copy.deepcopy(retry)
+
+    fixed_reply = _reply("fixed", usage={"prompt_tokens": 3, "completion_tokens": 2})
+    second_report = _reply(
+        _report("done", "fixed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    second_client = FakeClient([fixed_reply, second_report])
+
+    second = run_worker(
+        _args(),
+        ws,
+        second_client,
+        model="local",
+        params={"temperature": 1.0},
+        history=retry,
+    )
+
+    assert second_client.bodies[0]["messages"] == before
+    assert retry == before
+    assert second.turns == 1
+    assert second.tokens == {"prompt": 4, "completion": 3}
+    assert second.stop == "finished"
+    assert second.messages == [*before, {"role": "assistant", "content": "fixed"}]
+
+
+def test_history_turn_limit_counts_this_call(tmp_path):
+    ws = _ws(tmp_path)
+    history = [
+        {"role": "system", "content": "system"},
+        {"role": "user", "content": "task"},
+        {"role": "assistant", "content": "reply"},
+        {"role": "user", "content": "retry"},
+    ]
+    read_reply = _reply(
+        "",
+        tool_calls=[_call("read", path="a.py")],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([read_reply, report_reply])
+
+    result = run_worker(
+        _args(max_turns=1),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        history=history,
+    )
+
+    assert result.stop == "turn_limit"
+    assert result.turns == 1
