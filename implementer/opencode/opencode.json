@@ -37,13 +37,16 @@
           "uv run pytest*": "allow",
           "uv run ruff check*": "allow",
           "scripts/verify.sh*": "allow",
-          "bash scripts/verify.sh*": "allow"
+          "bash scripts/verify.sh*": "allow",
+          "tail*": "allow",
+          "head*": "allow"
         },
         "read": {
           "*": "allow",
           "*.env": "deny",
           "*.env.*": "deny",
-          "*uv.lock": "deny"
+          "*uv.lock": "deny",
+          "*/profiles/*.yaml": "deny"
         },
         "external_directory": "deny",
         "task": "deny",
