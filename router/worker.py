@@ -3,8 +3,10 @@
 S7 adds the worktree, the acceptance commands and the retries around it.
 """
 
+import argparse
 import json
 import re
+import sys
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -13,7 +15,8 @@ from typing import Protocol
 
 from jsonschema import Draft202012Validator, exceptions
 
-from router.llm import ChatReply, LLMError
+from router.llm import DEFAULT_BASE_URL, ChatReply, LLMClient, LLMError
+from router.profiles import ProfileError, load_profile, request_params
 from router.tools import TOOL_SPECS, Outcome, Workspace
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -41,6 +44,8 @@ STOPS = (
     "endpoint",
 )
 _JSON_CALL = re.compile(r'\{\s*"name"\s*:\s*"(?:read|write|edit|bash|grep)"')
+ARGS_SCHEMA_PATH = _REPO / "schemas" / "run_local_subagent.json"
+LOG_TEXT_LIMIT = 2_000
 
 
 class ChatClient(Protocol):
@@ -126,6 +131,13 @@ def _guard(bad_calls: int, writes: dict[str, int]) -> tuple[str, str] | None:
     return None
 
 
+def _log(log: Path | None, event: dict) -> None:
+    if log is None:
+        return
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
 def run_worker(
     args: dict,
     workspace: Workspace,
@@ -135,6 +147,7 @@ def run_worker(
     params: dict,
     prompts: dict[str, str] | None = None,
     narrated_markers: tuple[str, ...] = (),
+    log: Path | None = None,
 ) -> WorkerResult:
     if prompts is None:
         prompts = load_prompts()
@@ -168,6 +181,20 @@ def run_worker(
         message = reply.message
         content = message.get("content") or ""
         calls = message.get("tool_calls") or []
+
+        _log(
+            log,
+            {
+                "event": "model",
+                "turn": turns,
+                "finish_reason": reply.finish_reason,
+                "usage": reply.usage,
+                "timings": reply.timings,
+                "reasoning_chars": len(message.get("reasoning_content") or ""),
+                "content": content[:LOG_TEXT_LIMIT],
+                "tool_calls": calls,
+            },
+        )
 
         if reply.finish_reason == "length":
             bad_calls += 1
@@ -203,6 +230,16 @@ def run_worker(
             name = call.get("function", {}).get("name", "")
             arguments = call.get("function", {}).get("arguments", "")
             result = workspace.run(name, arguments)
+            _log(
+                log,
+                {
+                    "event": "tool",
+                    "turn": turns,
+                    "name": name,
+                    "outcome": result.outcome.value,
+                    "text": result.text[:LOG_TEXT_LIMIT],
+                },
+            )
             if result.outcome == Outcome.MUST_NOT_TOUCH:
                 stop = "must_not_touch"
                 detail = result.text
@@ -262,6 +299,17 @@ def run_worker(
             tokens["prompt"] += reply.usage.get("prompt_tokens", 0)
             tokens["completion"] += reply.usage.get("completion_tokens", 0)
             content = reply.message.get("content") or ""
+            _log(
+                log,
+                {
+                    "event": "report",
+                    "finish_reason": reply.finish_reason,
+                    "usage": reply.usage,
+                    "timings": reply.timings,
+                    "reasoning_chars": len(reply.message.get("reasoning_content") or ""),
+                    "content": content[:LOG_TEXT_LIMIT],
+                },
+            )
             try:
                 parsed = json.loads(content)
             except json.JSONDecodeError:
@@ -284,3 +332,78 @@ def run_worker(
         report=report,
         report_error=report_error,
     )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the worker loop once, in --repo itself (no worktree yet), and print the "
+            "result as JSON."
+        ),
+    )
+    parser.add_argument("--args", required=True)
+    parser.add_argument("--repo", default=None)
+    parser.add_argument("--model", default="local")
+    parser.add_argument("--profile", default="bonsai2-27b")
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument("--log", default=None)
+    parser.add_argument("--no-isolate-network", action="store_true")
+    ns = parser.parse_args(argv)
+
+    try:
+        raw = Path(ns.args).read_text(encoding="utf-8")
+    except OSError as error:
+        print(f"bad arguments: {error}", file=sys.stderr)
+        return 2
+    try:
+        args: dict = json.loads(raw)
+    except json.JSONDecodeError as error:
+        print(f"bad arguments: {error}", file=sys.stderr)
+        return 2
+    schema = json.loads(ARGS_SCHEMA_PATH.read_text(encoding="utf-8"))
+    errors = list(Draft202012Validator(schema).iter_errors(args))
+    if errors:
+        best = exceptions.best_match(errors)
+        print(f"bad arguments: {best.message}", file=sys.stderr)
+        return 2
+
+    repo = Path(ns.repo) if ns.repo else Path(args.get("repo") or ".")
+    if not repo.is_dir():
+        print(f"bad arguments: {repo}", file=sys.stderr)
+        return 2
+
+    try:
+        profile = load_profile(ns.profile)
+        params = request_params(profile, "agent")
+    except ProfileError as error:
+        print(f"bad profile: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        client = LLMClient(ns.base_url)
+    except ValueError as error:
+        print(f"bad base url: {error}", file=sys.stderr)
+        return 2
+
+    criteria = args["acceptance_criteria"]
+    workspace = Workspace(
+        root=repo,
+        files=args["files"],
+        must_not_touch=criteria.get("must_not_touch", []),
+        isolate_network=not ns.no_isolate_network,
+    )
+    result = run_worker(
+        args,
+        workspace,
+        client,
+        model=ns.model,
+        params=params,
+        narrated_markers=tuple(profile.get("narrated_markers", [])),
+        log=Path(ns.log) if ns.log else None,
+    )
+    print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

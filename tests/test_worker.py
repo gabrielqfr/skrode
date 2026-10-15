@@ -1,16 +1,25 @@
 """Tests for router.worker: the worker loop, driven by a fake client."""
 
+import contextlib
 import copy
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
+
 from router.llm import ChatReply, LLMError
+from router.profiles import load_profile, request_params
 from router.tools import TOOL_SPECS, Workspace
 from router.worker import (
+    LOG_TEXT_LIMIT,
     REPORT_FORMAT,
+    WorkerResult,
     build_body,
     is_narrated,
     load_prompts,
+    main,
     render,
     run_worker,
     task_message,
@@ -554,3 +563,271 @@ def test_report_endpoint_error(tmp_path):
     assert result.stop == "finished"
     assert result.report is None
     assert result.report_error == "endpoint: down"
+
+
+@pytest.fixture
+def fake_server():
+    @contextlib.contextmanager
+    def make(responses: list[tuple[int, bytes]]):
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args, **kwargs) -> None:
+                pass
+
+            def do_POST(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                status, body = responses.pop(0)
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+                self.wfile.flush()
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_address[1]}"
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=10)
+
+    return make
+
+
+def _completion(content: str, finish_reason: str = "stop") -> bytes:
+    message: dict = {"role": "assistant", "content": content}
+    return json.dumps(
+        {
+            "choices": [{"message": message, "finish_reason": finish_reason}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+        }
+    ).encode("utf-8")
+
+
+def _args_file(tmp_path: Path) -> Path:
+    path = tmp_path / "args.json"
+    path.write_text(
+        json.dumps(
+            {
+                "task": "Change a.py so the value x becomes 2 instead of 1.",
+                "files": ["a.py"],
+                "acceptance_criteria": {"commands": ["pytest -q"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_schema_errors_on_narrated_calls(tmp_path):
+    ws = _ws(tmp_path)
+    replies = [
+        _reply(
+            "CALL: read a.py",
+            usage={"prompt_tokens": 2, "completion_tokens": 1},
+        )
+        for _ in range(4)
+    ]
+    report = _reply(
+        _report("blocked", "x", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([*replies, report])
+
+    result = run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        narrated_markers=("CALL:",),
+    )
+
+    assert result.stop == "schema_errors"
+    assert result.detail == "4 bad calls"
+    assert result.turns == 4
+    assert result.bad_calls == 4
+    assert result.report == {"outcome": "blocked", "summary": "x", "concerns": []}
+    assert result.report_error == ""
+    assert len(client.bodies) == 5
+
+
+def test_log_events(tmp_path):
+    ws = _ws(tmp_path)
+    write_reply = _reply(
+        "",
+        tool_calls=[_call("write", path="a.py", content="x = 2\n")],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "changed a.py", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([write_reply, done_reply, report_reply])
+    log = tmp_path / "run.jsonl"
+
+    run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        log=log,
+    )
+
+    events = [
+        json.loads(line)
+        for line in log.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [event["event"] for event in events] == ["model", "tool", "model", "report"]
+    model_keys = {
+        "event",
+        "turn",
+        "finish_reason",
+        "usage",
+        "timings",
+        "reasoning_chars",
+        "content",
+        "tool_calls",
+    }
+    tool_keys = {"event", "turn", "name", "outcome", "text"}
+    report_keys = {
+        "event",
+        "finish_reason",
+        "usage",
+        "timings",
+        "reasoning_chars",
+        "content",
+    }
+    assert set(events[0]) == model_keys
+    assert set(events[1]) == tool_keys
+    assert set(events[2]) == model_keys
+    assert set(events[3]) == report_keys
+    assert events[1]["name"] == "write"
+    assert events[1]["outcome"] == "ok"
+
+
+def test_log_cuts_long_content(tmp_path):
+    ws = _ws(tmp_path)
+    long_reply = _reply(
+        "y" * 5000,
+        usage={"prompt_tokens": 2, "completion_tokens": 1},
+    )
+    report = _reply(
+        _report("done", "x", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([long_reply, report])
+    log = tmp_path / "run.jsonl"
+
+    run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        log=log,
+    )
+
+    model_event = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert len(model_event["content"]) == LOG_TEXT_LIMIT
+    assert model_event["content"] == "y" * LOG_TEXT_LIMIT
+
+
+def test_cli_runs_against_fake_server(tmp_path, capsys, fake_server):
+    report = _report("done", "changed a.py", [])
+    args_path = _args_file(tmp_path)
+    with fake_server([(200, _completion("done")), (200, _completion(report))]) as url:
+        code = main(
+            [
+                "--args",
+                str(args_path),
+                "--repo",
+                str(tmp_path),
+                "--base-url",
+                url,
+                "--no-isolate-network",
+            ]
+        )
+    parsed = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert parsed["stop"] == "finished"
+    assert parsed["report"] == {"outcome": "done", "summary": "changed a.py", "concerns": []}
+
+
+def test_cli_passes_profile_markers(tmp_path, monkeypatch):
+    recorded: list[dict] = []
+
+    def fake_worker(*args: object, **kwargs: dict) -> WorkerResult:
+        recorded.append(kwargs)
+        return WorkerResult("finished", "", 0, 0, {"prompt": 0, "completion": 0}, {}, "")
+
+    monkeypatch.setattr("router.worker.run_worker", fake_worker)
+    args_path = _args_file(tmp_path)
+    code = main(
+        [
+            "--args",
+            str(args_path),
+            "--repo",
+            str(tmp_path),
+            "--base-url",
+            "http://127.0.0.1:9999",
+            "--no-isolate-network",
+        ]
+    )
+    assert code == 0
+    assert recorded[0]["narrated_markers"] == (
+        tuple(load_profile("bonsai2-27b")["narrated_markers"])
+    )
+    assert recorded[0]["params"] == request_params(load_profile("bonsai2-27b"), "agent")
+
+
+def test_cli_bad_args(tmp_path, capsys):
+    args_path = tmp_path / "args.json"
+    args_path.write_text(
+        json.dumps(
+            {
+                "task": "Change a.py so the value x becomes 2 instead of 1.",
+                "acceptance_criteria": {"commands": ["pytest -q"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    code = main(["--args", str(args_path), "--repo", str(tmp_path)])
+    assert code == 2
+    assert capsys.readouterr().err.startswith("bad arguments: ")
+
+
+def test_cli_bad_profile(tmp_path, capsys):
+    args_path = _args_file(tmp_path)
+    code = main(
+        [
+            "--args",
+            str(args_path),
+            "--repo",
+            str(tmp_path),
+            "--profile",
+            "nope",
+        ]
+    )
+    assert code == 2
+    assert capsys.readouterr().err.startswith("bad profile: ")
+
+
+def test_cli_bad_base_url(tmp_path, capsys):
+    args_path = _args_file(tmp_path)
+    code = main(
+        [
+            "--args",
+            str(args_path),
+            "--repo",
+            str(tmp_path),
+            "--base-url",
+            "http://example.com:8080",
+        ]
+    )
+    assert code == 2
+    assert capsys.readouterr().err.startswith("bad base url: ")
