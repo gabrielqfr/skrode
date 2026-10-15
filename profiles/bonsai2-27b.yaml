@@ -1,0 +1,21 @@
+# Bonsai 2 27B (PrismML), served by PrismML's llama-server fork with --jinja.
+status: untested
+sources:
+  - https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
+  - https://github.com/PrismML-Eng/Bonsai-demo
+notes: >-
+  Sampling from the model card. reasoning_effort medium is PrismML's advice for API clients;
+  whether this fork honours it through chat_template_kwargs is the S6 effort test. Never use
+  low: the card says it behaves close to xhigh.
+agent:            # tool-using worker turns
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.05
+  max_tokens: 16384
+  chat_template_kwargs: {reasoning_effort: medium}
+oneshot:          # no-tool tasks (docstrings, commit messages)
+  temperature: 0.7
+  top_p: 0.80
+  top_k: 20
+  presence_penalty: 1.5
