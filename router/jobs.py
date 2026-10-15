@@ -1,9 +1,12 @@
 """A job: one task, its attempts, and the record the caller gets back."""
 
+import argparse
 import contextlib
 import json
 import os
 import secrets
+import sys
+import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -21,6 +24,8 @@ from router.acceptance import (
     run_checks,
     scope_violation,
 )
+from router.llm import DEFAULT_BASE_URL, LLMClient
+from router.profiles import ProfileError, load_profile, request_params
 from router.tools import Workspace, matches
 from router.worker import (
     ARGS_SCHEMA_PATH,
@@ -58,6 +63,8 @@ DETAIL_LIMIT = 300
 SUMMARY_LIMIT = 1_000
 CONCERN_LIMIT = 200
 CONCERNS_MAX = 3
+STORE_NAME = "jobs.jsonl"
+_STORE_LOCK = threading.Lock()  # jobs may finish on several threads at once
 
 
 def new_job_id(now: datetime | None = None) -> str:
@@ -133,6 +140,36 @@ def validate_record(record: dict) -> None:
     if errors:
         best = exceptions.best_match(errors)
         raise ValueError(f"invalid record: {best.message[:200]}")
+
+
+def append_record(record: dict, state_dir: Path = STATE_DIR) -> Path:
+    """Append one job record to state_dir/jobs.jsonl as a single line; return the file."""
+    state_dir.mkdir(parents=True, exist_ok=True)
+    path = state_dir / STORE_NAME
+    line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+    with _STORE_LOCK, path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+    return path
+
+
+def load_records(state_dir: Path = STATE_DIR) -> list[dict]:
+    """Every record in state_dir/jobs.jsonl, oldest first; [] when there is no store yet."""
+    try:
+        text = (state_dir / STORE_NAME).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return []
+    records: list[dict] = []
+    # split on "\n" only: str.splitlines would also split on U+2028 inside a record
+    for line in text.split("\n"):
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue  # a line cut short by a crash mid-write
+        if isinstance(record, dict):
+            records.append(record)
+    return records
 
 
 def build_record(
@@ -226,7 +263,7 @@ def _remove_keeping_verdict(
     return ""
 
 
-def run_job(
+def _run_job(
     args: dict,
     client: ChatClient,
     *,
@@ -450,3 +487,98 @@ def run_job(
             with contextlib.suppress(Exception):
                 remove(repo, worktree, job_id, keep_branch=False)
         return failed("internal", _error_line(error))
+
+
+def run_job(
+    args: dict,
+    client: ChatClient,
+    *,
+    profile_name: str,
+    model: str,
+    params: dict,
+    narrated_markers: tuple[str, ...] = (),
+    prompts: dict[str, str] | None = None,
+    state_dir: Path = STATE_DIR,
+    job_id: str | None = None,
+    setup: tuple[str, ...] = (),
+    sandbox: bool = True,
+    check_timeout_s: int = CHECK_TIMEOUT_S,
+) -> dict:
+    """Run one job, append its record to state_dir/jobs.jsonl, and return the record."""
+    record = _run_job(
+        args,
+        client,
+        profile_name=profile_name,
+        model=model,
+        params=params,
+        narrated_markers=narrated_markers,
+        prompts=prompts,
+        state_dir=state_dir,
+        job_id=job_id,
+        setup=setup,
+        sandbox=sandbox,
+        check_timeout_s=check_timeout_s,
+    )
+    # the caller still gets its record when the store cannot be written
+    with contextlib.suppress(OSError):
+        append_record(record, state_dir)
+    return record
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run one job (worktree, worker, acceptance checks, retries) and print its "
+            "record as JSON."
+        ),
+    )
+    parser.add_argument("--args", required=True)
+    parser.add_argument("--model", default="local")
+    parser.add_argument("--profile", default="bonsai2-27b")
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument("--no-sandbox", action="store_true")
+    parser.add_argument("--setup", action="append", default=[])
+    parser.add_argument("--state-dir", default=None)
+    ns = parser.parse_args(argv)
+
+    try:
+        raw = Path(ns.args).read_text(encoding="utf-8")
+    except OSError as error:
+        print(f"bad arguments: {error}", file=sys.stderr)
+        return 2
+    try:
+        args: dict = json.loads(raw)
+    except json.JSONDecodeError as error:
+        print(f"bad arguments: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        profile = load_profile(ns.profile)
+        params = request_params(profile, "agent")
+    except ProfileError as error:
+        print(f"bad profile: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        client = LLMClient(ns.base_url)
+    except ValueError as error:
+        print(f"bad base url: {error}", file=sys.stderr)
+        return 2
+
+    record = run_job(
+        args,
+        client,
+        profile_name=ns.profile,
+        model=ns.model,
+        params=params,
+        narrated_markers=tuple(profile.get("narrated_markers", [])),
+        state_dir=Path(ns.state_dir) if ns.state_dir else STATE_DIR,
+        setup=tuple(ns.setup),
+        sandbox=not ns.no_sandbox,
+    )
+    print(json.dumps(record, indent=2, ensure_ascii=False))
+    return 0 if record["status"] == "passed" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
