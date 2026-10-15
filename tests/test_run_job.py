@@ -485,3 +485,44 @@ def test_check_concern_comes_before_remove_concern(repo, monkeypatch):
         "the checks changed a.py; the branch has it as it was before the checks ran",
         "could not remove the worktree: WorktreeError: busy",
     ]
+
+
+def test_cancel_keeps_work_and_skips_checks(repo: Path) -> None:
+    answers = iter([None, "cancelled"])
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, should_stop=lambda: next(answers, None))
+    assert record["status"] == "failed"
+    assert record["reason"] == "cancelled"
+    assert record["detail"] == "cancelled in attempt 1, after 1 of 40 turns"
+    assert record["attempts"] == 1
+    assert record["turns"] == 1
+    assert record["checks"] == []
+    assert record["branch"] == f"local-agent/{JOB}"
+    assert sh(repo, "show", f"local-agent/{JOB}:a.py") == "x = 2"
+    assert not (repo.parent / "state" / "jobs" / JOB / "check-1-1.log").exists()
+
+
+def test_timeout_before_any_call(repo: Path) -> None:
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, should_stop=lambda: "timeout")
+    assert record["status"] == "failed"
+    assert record["reason"] == "timeout"
+    assert record["detail"] == "timed out in attempt 1, after 0 of 40 turns"
+    assert record["turns"] == 0
+    assert record["branch"] is None
+    assert client.bodies == []
+
+
+def test_progress_lines(repo: Path) -> None:
+    lines: list[str] = []
+    client = ScriptClient([WRONG_WRITE, done(), W, done()])
+    record = _run(repo, client, progress=lines.append)
+    assert record["status"] == "passed"
+    assert lines == [
+        "attempt 1 of 3: turn 1 of 40",
+        "attempt 1 of 3: turn 2 of 40",
+        "attempt 1 of 3: running the checks",
+        "attempt 2 of 3: turn 1 of 40",
+        "attempt 2 of 3: turn 2 of 40",
+        "attempt 2 of 3: running the checks",
+    ]

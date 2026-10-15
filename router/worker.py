@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from string import Template
@@ -40,9 +40,11 @@ STOPS = (
     "must_not_touch",
     "schema_errors",
     "rewrite_loop",
-    "turn_limit",
-    "endpoint",
-)
+        "turn_limit",
+        "endpoint",
+        "cancelled",
+        "timeout",
+    )
 _JSON_CALL = re.compile(r'\{\s*"name"\s*:\s*"(?:read|write|edit|bash|grep)"')
 ARGS_SCHEMA_PATH = _REPO / "schemas" / "run_local_subagent.json"
 LOG_TEXT_LIMIT = 2_000
@@ -161,6 +163,8 @@ def run_worker(
     log: Path | None = None,
     history: list[dict] | None = None,
     bad_calls_before: int = 0,
+    should_stop: Callable[[], str | None] | None = None,
+    on_turn: Callable[[int], None] | None = None,
 ) -> WorkerResult:
     if prompts is None:
         prompts = load_prompts()
@@ -180,6 +184,12 @@ def run_worker(
     detail = ""
 
     while True:
+        # polled before every model call; the caller answers "cancelled" or "timeout"
+        stop_reason = should_stop() if should_stop is not None else None
+        if stop_reason is not None:
+            stop = stop_reason
+            detail = f"after {turns} of {max_turns} turns"
+            break
         if turns == max_turns:
             stop = "turn_limit"
             detail = f"{max_turns} turns"
@@ -193,6 +203,9 @@ def run_worker(
         turns += 1
         tokens["prompt"] += reply.usage.get("prompt_tokens", 0)
         tokens["completion"] += reply.usage.get("completion_tokens", 0)
+
+        if on_turn is not None:
+            on_turn(turns)
 
         message = reply.message
         content = message.get("content") or ""

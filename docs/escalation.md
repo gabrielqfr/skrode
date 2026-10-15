@@ -59,8 +59,8 @@ made, say), the verdict stands and a concern says the worktree is still on disk.
 | --- | --- |
 | `bad_request` | Arguments fail `schemas/run_local_subagent.json`, `repo` is not a git repo, `base` does not resolve, a path is in both `files` and `must_not_touch`, or a setup command (the router's own, run before the worker) fails or leaves a changed or untracked file |
 | `endpoint` | The model server on `127.0.0.1` is down or keeps returning errors |
-| `timeout` | The job ran past its wall-clock limit |
-| `cancelled` | `cancel_job` was called |
+| `timeout` | The job ran past its wall-clock limit. The worker stops before its next model call; the checks do not run, and work so far stays on the branch |
+| `cancelled` | `cancel_job` was called. The worker stops before its next model call; the checks do not run, and work so far stays on the branch |
 | `internal` | A router bug. `detail` holds the exception's last line |
 
 ## Defaults

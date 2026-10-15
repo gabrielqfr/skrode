@@ -376,3 +376,32 @@ def test_verdict_outside_files_beats_turn_limit():
 def test_verdict_turn_limit_does_not_retry():
     attempt = _attempt(stop="turn_limit", checks=[_check(exit_code=1)])
     assert _verdict(attempt, 1)[1] == "turn_limit"
+
+
+def test_verdict_cancelled():
+    attempt = _attempt(stop="cancelled", detail="after 3 of 15 turns", report=None, checks=[])
+    assert _verdict(attempt, 2) == (
+        "failed",
+        "cancelled",
+        "cancelled in attempt 2, after 3 of 15 turns",
+    )
+
+
+def test_verdict_timeout():
+    attempt = _attempt(stop="timeout", detail="after 0 of 15 turns", report=None, checks=[])
+    assert _verdict(attempt) == (
+        "failed",
+        "timeout",
+        "timed out in attempt 1, after 0 of 15 turns",
+    )
+
+
+def test_verdict_protected_change_wins_over_cancel():
+    attempt = _attempt(
+        stop="cancelled",
+        detail="after 3 of 15 turns",
+        report=None,
+        checks=[],
+        scope=("must_not_touch", "tests/t.py"),
+    )
+    assert _verdict(attempt) == ("escalate", "must_not_touch", "tests/t.py")

@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -110,6 +111,12 @@ def verdict(
         status, reason, detail = "escalate", "must_not_touch", attempt.detail
     elif attempt.scope is not None and attempt.scope[0] == "must_not_touch":
         status, reason, detail = "escalate", "must_not_touch", attempt.scope[1]
+    elif attempt.stop == "cancelled":
+        status, reason = "failed", "cancelled"
+        detail = f"cancelled in attempt {number}, {attempt.detail}"
+    elif attempt.stop == "timeout":
+        status, reason = "failed", "timeout"
+        detail = f"timed out in attempt {number}, {attempt.detail}"
     elif attempt.stop == "endpoint":
         status, reason, detail = "failed", "endpoint", attempt.detail
     elif attempt.scope is not None:
@@ -285,6 +292,8 @@ def _run_job(
     setup: tuple[str, ...] = (),
     sandbox: bool = True,
     check_timeout_s: int = CHECK_TIMEOUT_S,
+    should_stop: Callable[[], str | None] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> dict:
     start = time.monotonic()
     if job_id is None:
@@ -369,6 +378,9 @@ def _run_job(
         )
         max_attempts = 1 + args.get("max_retries", 2)
         max_turns = args.get("max_turns", DEFAULT_MAX_TURNS)
+        def on_turn(turn: int) -> None:
+            if progress is not None:
+                progress(f"attempt {attempts} of {max_attempts}: turn {turn} of {max_turns}")
         bad_calls = 0
         history = [
             {"role": "system", "content": prompts["system"]},
@@ -391,6 +403,8 @@ def _run_job(
                 log=logs / f"worker-{attempts}.jsonl",
                 history=history,
                 bad_calls_before=bad_calls,
+                should_stop=should_stop,
+                on_turn=on_turn,
             )
             turns += result.turns
             tokens["prompt"] += result.tokens["prompt"]
@@ -398,11 +412,13 @@ def _run_job(
             bad_calls = result.bad_calls
             changed = changed_paths(worktree, base_commit)
             scope = scope_violation(changed, files, must_not_touch)
-            if result.stop in ("must_not_touch", "endpoint") or (
+            if result.stop in ("must_not_touch", "endpoint", "cancelled", "timeout") or (
                 scope is not None and scope[0] == "must_not_touch"
             ):
                 checks = []
             else:
+                if progress is not None:
+                    progress(f"attempt {attempts} of {max_attempts}: running the checks")
                 commit_all(worktree, base_commit, f"hybrid-router job {job_id} attempt {attempts}")
                 checks = run_checks(
                     worktree,
@@ -511,6 +527,8 @@ def run_job(
     setup: tuple[str, ...] = (),
     sandbox: bool = True,
     check_timeout_s: int = CHECK_TIMEOUT_S,
+    should_stop: Callable[[], str | None] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> dict:
     """Run one job, append its record to state_dir/jobs.jsonl, and return the record."""
     record = _run_job(
@@ -526,6 +544,8 @@ def run_job(
         setup=setup,
         sandbox=sandbox,
         check_timeout_s=check_timeout_s,
+        should_stop=should_stop,
+        progress=progress,
     )
     # the caller still gets its record when the store cannot be written
     with contextlib.suppress(OSError):

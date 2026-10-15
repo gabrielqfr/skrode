@@ -1100,3 +1100,67 @@ def test_default_max_turns_matches_schema():
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert DEFAULT_MAX_TURNS == 40
     assert schema["properties"]["max_turns"]["default"] == DEFAULT_MAX_TURNS
+
+
+def test_should_stop_before_first_call(tmp_path):
+    ws = _ws(tmp_path)
+    client = FakeClient([])
+
+    result = run_worker(
+        _args(), ws, client, model="local", params={}, should_stop=lambda: "timeout"
+    )
+    assert result.stop == "timeout"
+    assert result.detail == "after 0 of 40 turns"
+    assert result.turns == 0
+    assert result.report is None
+    assert result.report_error == ""
+    assert client.bodies == []
+
+
+def test_should_stop_between_turns(tmp_path):
+    ws = _ws(tmp_path)
+    client = FakeClient([_reply("", tool_calls=[_call("read", path="a.py")])])
+    answers = iter([None, "cancelled"])
+    seen: list[int] = []
+
+    result = run_worker(
+        _args(max_turns=5),
+        ws,
+        client,
+        model="local",
+        params={},
+        should_stop=lambda: next(answers, None),
+        on_turn=seen.append,
+    )
+    assert result.stop == "cancelled"
+    assert result.detail == "after 1 of 5 turns"
+    assert result.turns == 1
+    assert result.report is None
+    assert len(client.bodies) == 1
+    assert seen == [1]
+
+
+def test_on_turn_skips_the_report_call(tmp_path):
+    ws = _ws(tmp_path)
+    client = FakeClient(
+        [
+            _reply("", tool_calls=[_call("read", path="a.py")]),
+            _reply("done"),
+            _reply(_report("done", "read a.py", [])),
+        ]
+    )
+    seen: list[int] = []
+
+    result = run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={},
+        should_stop=lambda: None,
+        on_turn=seen.append,
+    )
+    assert result.stop == "finished"
+    assert result.report == {"outcome": "done", "summary": "read a.py", "concerns": []}
+    assert seen == [1, 2]
+    assert len(client.bodies) == 3
