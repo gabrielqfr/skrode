@@ -97,7 +97,7 @@
       "type": "function",
       "function": {
         "name": "bash",
-        "description": "Run a shell command from the worktree root, without network. Output is cut to the last 12 KB of stdout and 4 KB of stderr.",
+        "description": "Run a shell command from the worktree root, without network; only the worktree and /tmp are writable. Output is cut to the last 12 KB of stdout and 4 KB of stderr.",
         "parameters": {
           "type": "object",
           "additionalProperties": false,
