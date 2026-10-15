@@ -18,6 +18,12 @@
       "items": {"type": "string", "pattern": "^https://"}
     },
     "notes": {"type": "string", "maxLength": 1000},
+    "narrated_markers": {
+      "description": "Strings that mark a tool call written into the reply's content instead of tool_calls: the model's own call delimiters. Matched as plain substrings; never sent to the server. Profiles write them with YAML escapes, so no file a worker reads holds the bare delimiters.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "default": []
+    },
     "agent": {"$ref": "#/$defs/mode"},
     "oneshot": {"$ref": "#/$defs/mode"}
   },

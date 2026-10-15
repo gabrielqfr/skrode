@@ -7,6 +7,8 @@ notes: >-
   Sampling from the model card. reasoning_effort medium is PrismML's advice for API clients;
   whether this fork honours it through chat_template_kwargs is the S6 effort test. Never use
   low: the card says it behaves close to xhigh.
+# Its chat template's call delimiters, escaped: the bare tags cut off any model output holding them.
+narrated_markers: ["\x3ctool_call>", "\x3cfunction="]
 agent:            # tool-using worker turns
   temperature: 1.0
   top_p: 0.95
