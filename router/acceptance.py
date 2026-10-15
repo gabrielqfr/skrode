@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from router.tools import HIDDEN_ENV_PREFIXES, NO_NETWORK, matches
+from router.tools import HIDDEN_ENV_PREFIXES, matches, sandbox_argv
 
 CHECK_TIMEOUT_S = 600
 TAIL_LINES = 200
@@ -61,14 +61,25 @@ def run_check(
     log: Path,
     *,
     timeout_s: int = CHECK_TIMEOUT_S,
-    isolate_network: bool = True,
+    sandbox: bool = True,
 ) -> CheckResult:
     log.parent.mkdir(parents=True, exist_ok=True)
-    argv = [*NO_NETWORK, "bash", "-c", command] if isolate_network else ["bash", "-c", command]
+    argv = sandbox_argv(worktree, command) if sandbox else ["bash", "-c", command]
     env = {k: v for k, v in os.environ.items() if not k.startswith(HIDDEN_ENV_PREFIXES)}
     start = time.monotonic()
     timed_out = False
     with log.open("wb") as out:
+        if not worktree.is_dir():
+            out.write((f"worktree not found: {worktree}\n").encode())
+            out.flush()
+            return CheckResult(
+                command,
+                127,
+                False,
+                round(time.monotonic() - start, 1),
+                read_tail(log),
+                log,
+            )
         try:
             proc = subprocess.Popen(
                 argv,
@@ -81,7 +92,7 @@ def run_check(
                 env=env,
             )
         except FileNotFoundError:
-            out.write(b"unshare is not available\n")
+            out.write((f"{argv[0]} is not available\n").encode())
             out.flush()
             elapsed = time.monotonic() - start
             return CheckResult(command, 127, False, round(elapsed, 1), read_tail(log), log)
@@ -108,7 +119,7 @@ def run_checks(
     attempt: int,
     *,
     timeout_s: int = CHECK_TIMEOUT_S,
-    isolate_network: bool = True,
+    sandbox: bool = True,
 ) -> list[CheckResult]:
     results: list[CheckResult] = []
     for i, command in enumerate(commands, start=1):
@@ -118,7 +129,7 @@ def run_checks(
                 command,
                 log_dir / f"check-{attempt}-{i}.log",
                 timeout_s=timeout_s,
-                isolate_network=isolate_network,
+                sandbox=sandbox,
             )
         )
     return results

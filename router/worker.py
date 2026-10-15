@@ -347,7 +347,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default="bonsai2-27b")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--log", default=None)
-    parser.add_argument("--no-isolate-network", action="store_true")
+    parser.add_argument("--no-sandbox", action="store_true")
     ns = parser.parse_args(argv)
 
     try:
@@ -390,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         root=repo,
         files=args["files"],
         must_not_touch=criteria.get("must_not_touch", []),
-        isolate_network=not ns.no_isolate_network,
+        sandbox=not ns.no_sandbox,
     )
     result = run_worker(
         args,

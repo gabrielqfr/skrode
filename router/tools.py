@@ -21,8 +21,19 @@ GREP_LINE_LIMIT = 300
 GREP_MATCH_LIMIT = 100
 GREP_TIMEOUT_S = 30
 
-# a new network namespace holds only a down loopback, so commands get no network
-NO_NETWORK = ("unshare", "--user", "--map-root-user", "--net", "--")
+# credentials the local model has no use for, hidden inside the sandbox (AGENTS.md, rule 4)
+MASKED_HOME_PATHS = (
+    ".claude",
+    ".claude.json",
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".netrc",
+    ".git-credentials",
+    ".config/gh",
+)
+# the user's uv cache is read-only inside the sandbox, and uv will not run without a writable one
+SANDBOX_UV_CACHE = "/tmp/uv-cache"
 
 # the local model never sees Anthropic credentials (AGENTS.md, non-negotiable 4)
 HIDDEN_ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE_")
@@ -71,12 +82,49 @@ def _tail(text: str, limit: int) -> str:
     return f"[cut: last {limit} of {len(text)} characters]\n" + text[-limit:]
 
 
+def sandbox_argv(root: Path, command: str) -> list[str]:
+    root = root.resolve()
+    home = Path.home()
+    argv = [
+        "bwrap",
+        "--ro-bind", "/", "/",
+        "--dev", "/dev",
+        "--proc", "/proc",
+        "--tmpfs", "/tmp",
+    ]
+    for name in MASKED_HOME_PATHS:
+        path = home / name
+        if path.is_dir():
+            argv += ["--tmpfs", str(path)]
+        elif path.exists():
+            argv += ["--ro-bind", "/dev/null", str(path)]
+    argv += ["--bind", str(root), str(root)]
+    # the router's git calls run in the worktree; a rewritten .git could point them at
+    # a config the command wrote
+    if (root / ".git").exists():
+        argv += ["--ro-bind", str(root / ".git"), str(root / ".git")]
+    argv += [
+        "--unshare-net",
+        "--unshare-pid",
+        "--die-with-parent",
+        "--new-session",
+        "--setenv", "TMPDIR", "/tmp",
+        "--setenv", "UV_CACHE_DIR", SANDBOX_UV_CACHE,
+        "--chdir", str(root),
+        "--",
+        "bash",
+        "-c",
+        command,
+    ]
+    return argv
+
+
 @dataclass
 class Workspace:
     root: Path
     files: list[str]
     must_not_touch: list[str] = field(default_factory=list)
-    isolate_network: bool = True
+    sandbox: bool = True
 
     def relpath(self, path: str) -> str:
         resolved_root = self.root.resolve()
@@ -190,7 +238,9 @@ class Workspace:
     def _bash(self, args: dict) -> ToolResult:
         cmd = args["cmd"]
         timeout_s = args.get("timeout_s", 120)
-        argv = [*NO_NETWORK, "bash", "-c", cmd] if self.isolate_network else ["bash", "-c", cmd]
+        if not self.root.is_dir():
+            return ToolResult(Outcome.ERROR, f"worktree not found: {self.root}")
+        argv = sandbox_argv(self.root, cmd) if self.sandbox else ["bash", "-c", cmd]
         env = {k: v for k, v in os.environ.items() if not k.startswith(HIDDEN_ENV_PREFIXES)}
         try:
             proc = subprocess.Popen(
@@ -203,7 +253,7 @@ class Workspace:
                 env=env,
             )
         except FileNotFoundError:
-            return ToolResult(Outcome.ERROR, "unshare is not available")
+            return ToolResult(Outcome.ERROR, f"{argv[0]} is not available")
         timed_out = False
         try:
             stdout, stderr = proc.communicate(timeout=timeout_s)

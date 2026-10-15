@@ -10,11 +10,13 @@ import pytest
 
 from router.tools import (
     GREP_TIMEOUT_S,
-    NO_NETWORK,
+    MASKED_HOME_PATHS,
+    SANDBOX_UV_CACHE,
     TOOL_SPECS,
     Outcome,
     Workspace,
     matches,
+    sandbox_argv,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -210,7 +212,7 @@ def test_edit_two_matches(tmp_path):
 
 
 def test_bash_reply_format(tmp_path):
-    ws = Workspace(root=tmp_path, files=[], isolate_network=False)
+    ws = Workspace(root=tmp_path, files=[], sandbox=False)
     r = ws.run("bash", {"cmd": "echo hi; echo err >&2; exit 3"})
     assert r.outcome == Outcome.OK
     assert r.text == "exit 3\n--- stdout ---\nhi\n--- stderr ---\nerr"
@@ -220,14 +222,14 @@ def test_bash_reply_format(tmp_path):
 
 
 def test_bash_runs_in_the_root(tmp_path):
-    ws = Workspace(root=tmp_path, files=[], isolate_network=False)
+    ws = Workspace(root=tmp_path, files=[], sandbox=False)
     r = ws.run("bash", {"cmd": "pwd"})
     assert r.outcome == Outcome.OK
     assert r.text.splitlines()[-1] == str(tmp_path.resolve())
 
 
 def test_bash_timeout_kills_the_group(tmp_path):
-    ws = Workspace(root=tmp_path, files=[], isolate_network=False)
+    ws = Workspace(root=tmp_path, files=[], sandbox=False)
     start = time.monotonic()
     r = ws.run("bash", {"cmd": "sleep 30 & sleep 30", "timeout_s": 1})
     elapsed = time.monotonic() - start
@@ -237,7 +239,7 @@ def test_bash_timeout_kills_the_group(tmp_path):
 
 
 def test_bash_cuts_long_output(tmp_path):
-    ws = Workspace(root=tmp_path, files=[], isolate_network=False)
+    ws = Workspace(root=tmp_path, files=[], sandbox=False)
     r = ws.run("bash", {"cmd": "head -c 20000 /dev/zero | tr '\\0' x"})
     assert r.outcome == Outcome.OK
     assert "[cut: last 12000 of 20000 characters]" in r.text
@@ -246,7 +248,7 @@ def test_bash_cuts_long_output(tmp_path):
 def test_bash_hides_anthropic_env(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "tok")
-    ws = Workspace(root=tmp_path, files=[], isolate_network=False)
+    ws = Workspace(root=tmp_path, files=[], sandbox=False)
     r = ws.run("bash", {"cmd": "env"})
     assert r.outcome == Outcome.OK
     assert "ANTHROPIC_API_KEY" not in r.text
@@ -254,20 +256,125 @@ def test_bash_hides_anthropic_env(tmp_path, monkeypatch):
     assert "PATH=" in r.text
 
 
-def _unshare_ok() -> bool:
+def _bwrap_ok() -> bool:
     try:
-        result = subprocess.run((*NO_NETWORK, "true"), capture_output=True, timeout=10)
+        result = subprocess.run(
+            ["bwrap", "--ro-bind", "/", "/", "--unshare-net", "--", "true"],
+            capture_output=True,
+            timeout=10,
+        )
         return result.returncode == 0
-    except (FileNotFoundError, OSError):
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return False
 
 
-@pytest.mark.skipif(not _unshare_ok(), reason="unshare not available")
+needs_bwrap = pytest.mark.skipif(not _bwrap_ok(), reason="bwrap not usable")
+
+
+def _at(argv: list[str], *items: str) -> int:
+    for i in range(len(argv) - len(items) + 1):
+        if tuple(argv[i : i + len(items)]) == items:
+            return i
+    raise AssertionError(f"{items} not in {argv}")
+
+
+@needs_bwrap
 def test_bash_has_no_network(tmp_path):
-    ws = Workspace(root=tmp_path, files=[], isolate_network=True)
+    ws = Workspace(root=tmp_path, files=[])
     r = ws.run("bash", {"cmd": "tail -n +3 /proc/net/dev | cut -d: -f1 | tr -d ' '"})
     assert r.outcome == Outcome.OK
     assert r.text == "exit 0\n--- stdout ---\nlo"
+
+
+def test_sandbox_argv_order(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    root = tmp_path / "wt"
+    home.mkdir()
+    root.mkdir()
+    (home / ".ssh").mkdir()
+    (home / ".netrc").write_text("x", encoding="utf-8")
+    (root / ".git").write_text("gitdir: x\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    argv = sandbox_argv(root, "echo hi")
+    assert argv[0] == "bwrap"
+    assert argv[-4:] == ["--", "bash", "-c", "echo hi"]
+    assert (
+        _at(argv, "--ro-bind", "/", "/")
+        < _at(argv, "--tmpfs", "/tmp")
+        < _at(argv, "--tmpfs", str(home / ".ssh"))
+        < _at(argv, "--bind", str(root), str(root))
+        < _at(argv, "--ro-bind", str(root / ".git"), str(root / ".git"))
+    )
+    assert _at(argv, "--ro-bind", "/dev/null", str(home / ".netrc")) >= 0
+    assert str(home / ".gnupg") not in argv
+    assert "--unshare-net" in argv
+    assert "--unshare-pid" in argv
+    assert _at(argv, "--setenv", "UV_CACHE_DIR", SANDBOX_UV_CACHE) >= 0
+    assert _at(argv, "--chdir", str(root)) >= 0
+
+
+def test_sandbox_argv_without_git(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    root = tmp_path / "wt"
+    home.mkdir()
+    root.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    argv = sandbox_argv(root, "echo hi")
+    assert str(root / ".git") not in argv
+
+
+def test_masked_paths_cover_claude():
+    assert ".claude" in MASKED_HOME_PATHS
+    assert ".ssh" in MASKED_HOME_PATHS
+
+
+@needs_bwrap
+def test_sandboxed_bash_writes_only_the_worktree(tmp_path):
+    root = tmp_path / "wt"
+    root.mkdir()
+    (root / ".git").write_text("gitdir: x\n", encoding="utf-8")
+    probe = Path(__file__).resolve().parent / f"sandbox-probe-{os.getpid()}.txt"
+    cmd = f"echo in > inside.txt; echo y > .git; touch {probe}; echo $UV_CACHE_DIR; pwd"
+    r = Workspace(root=root, files=[]).run("bash", {"cmd": cmd})
+    try:
+        assert (root / "inside.txt").read_text(encoding="utf-8") == "in\n"
+        assert (root / ".git").read_text(encoding="utf-8") == "gitdir: x\n"
+        assert not probe.exists()
+        assert SANDBOX_UV_CACHE in r.text
+        assert str(root.resolve()) in r.text
+    finally:
+        if probe.exists():
+            probe.unlink()
+
+
+@needs_bwrap
+def test_sandboxed_bash_timeout_kills_children(tmp_path):
+    root = tmp_path / "wt"
+    root.mkdir()
+    ws = Workspace(root=root, files=[])
+    start = time.monotonic()
+    r = ws.run("bash", {"cmd": "(sleep 2; echo late > late.txt) & sleep 30", "timeout_s": 1})
+    assert r.text.startswith("timed out after 1 s")
+    assert time.monotonic() - start < 10
+    time.sleep(3)
+    assert not (root / "late.txt").exists()
+
+
+def test_bash_missing_worktree(tmp_path):
+    ws = Workspace(root=tmp_path / "gone", files=[])
+    r = ws.run("bash", {"cmd": "true"})
+    assert r.outcome == Outcome.ERROR
+    assert r.text == f"worktree not found: {tmp_path / 'gone'}"
+
+
+def test_bash_missing_executable(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    r = Workspace(root=tmp_path, files=[], sandbox=False).run("bash", {"cmd": "true"})
+    assert r.outcome == Outcome.ERROR
+    assert r.text == "bash is not available"
+    r2 = Workspace(root=tmp_path, files=[]).run("bash", {"cmd": "true"})
+    assert r2.outcome == Outcome.ERROR
+    assert r2.text == "bwrap is not available"
 
 
 def _git_init(root: Path) -> None:

@@ -89,7 +89,7 @@ def _ws(tmp_path: Path) -> Workspace:
         root=tmp_path,
         files=["a.py"],
         must_not_touch=["tests/"],
-        isolate_network=False,
+        sandbox=False,
     )
 
 
@@ -749,7 +749,7 @@ def test_cli_runs_against_fake_server(tmp_path, capsys, fake_server):
                 str(tmp_path),
                 "--base-url",
                 url,
-                "--no-isolate-network",
+                "--no-sandbox",
             ]
         )
     parsed = json.loads(capsys.readouterr().out)
@@ -775,7 +775,7 @@ def test_cli_passes_profile_markers(tmp_path, monkeypatch):
             str(tmp_path),
             "--base-url",
             "http://127.0.0.1:9999",
-            "--no-isolate-network",
+            "--no-sandbox",
         ]
     )
     assert code == 0

@@ -48,6 +48,14 @@ def fake_server():
                 self.wfile.write(body)
                 self.wfile.flush()
 
+            def do_GET(self) -> None:
+                received.append({"path": self.path, "content_type": None, "body": None})
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b"{}")
+                self.wfile.flush()
+
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -259,7 +267,7 @@ def test_incomplete_reply_is_retried():
             sleeps.append(seconds)
 
         def serve() -> None:
-            while True:
+            for _ in range(2):
                 conn, _ = listener.accept()
                 data = b""
                 while b"\r\n\r\n" not in data:
@@ -284,6 +292,8 @@ def test_incomplete_reply_is_retried():
                 attempts=2,
                 sleep=sleep,
             ).chat({"a": 1})
+        thread.join(timeout=5)
+        assert not thread.is_alive()
 
     assert str(excinfo.value).startswith("endpoint failed after 2 attempts: IncompleteRead")
     assert sleeps == [1]
