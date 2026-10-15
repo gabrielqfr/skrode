@@ -237,21 +237,27 @@ class Workspace:
                 pathspecs = [rel]
         elif glob is not None:
             pathspecs = [glob]
-        result = subprocess.run(
-            [
-                "git",
-                "grep",
-                "-nIE",
-                "--untracked",
-                "--no-color",
-                "-e",
-                args["pattern"],
-                "--",
-                *pathspecs,
-            ],
-            cwd=self.root,
-            capture_output=True,
-        )
+        try:
+            result = subprocess.run(
+                [
+                    "git",
+                    "grep",
+                    "-nIE",
+                    "--untracked",
+                    "--no-color",
+                    "-e",
+                    args["pattern"],
+                    "--",
+                    *pathspecs,
+                ],
+                cwd=self.root,
+                capture_output=True,
+                timeout=GREP_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            return ToolResult(
+                Outcome.ERROR, f"grep timed out after {GREP_TIMEOUT_S} s"
+            )
         if result.returncode == 1:
             return ToolResult(Outcome.OK, "no matches")
         if result.returncode != 0:

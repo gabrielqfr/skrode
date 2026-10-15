@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from router.tools import (
+    GREP_TIMEOUT_S,
     NO_NETWORK,
     TOOL_SPECS,
     Outcome,
@@ -344,3 +345,19 @@ def test_grep_caps_matches(tmp_path):
     lines_out = r.text.splitlines()
     assert len(lines_out) == 101
     assert lines_out[-1] == "[50 more matching lines]"
+
+
+def test_grep_timeout(monkeypatch, tmp_path):
+    calls: list[dict] = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(kwargs)
+        raise subprocess.TimeoutExpired(args[0], kwargs.get("timeout"))
+
+    monkeypatch.setattr("router.tools.subprocess.run", fake_run)
+    ws = Workspace(root=tmp_path, files=[])
+    r = ws.run("grep", {"pattern": "foo", "glob": "**/*.py"})
+    assert r.outcome == Outcome.ERROR
+    assert r.text == f"grep timed out after {GREP_TIMEOUT_S} s"
+    assert len(calls) == 1
+    assert calls[0]["timeout"] == GREP_TIMEOUT_S
