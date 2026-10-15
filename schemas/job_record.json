@@ -85,7 +85,7 @@
       "type": ["string", "null"],
       "pattern": "^[A-Za-z0-9._/-]{1,100}$"
     },
-    "base_commit": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+    "base_commit": {"description": "The commit the worktree started from; empty when the job failed before resolving base.", "type": "string", "pattern": "^(?:[0-9a-f]{7,40})?$"},
     "model": {"description": "The model profile the job ran with, a file name in profiles/ without .yaml. The served alias can differ.", "type": "string", "maxLength": 100},
     "local_tokens": {
       "type": "object",
