@@ -4,9 +4,10 @@ sources:
   - https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
   - https://github.com/PrismML-Eng/Bonsai-demo
 notes: >-
-  Sampling from the model card. reasoning_effort medium is PrismML's advice for API clients;
-  whether this fork honours it through chat_template_kwargs is the S6 effort test. Never use
-  low: the card says it behaves close to xhigh.
+  Sampling from the model card. reasoning_effort medium is PrismML's advice for API clients.
+  This fork honours it in chat_template_kwargs and as a top-level key alike (S6 effort test,
+  15 Oct 2026): the template drops its xhigh system line, and reasoning falls about 4-5 times
+  on a one-function task. Never use low: the card says it behaves close to xhigh.
 # Its chat template's call delimiters, escaped: the bare tags cut off any model output holding them.
 narrated_markers: ["\x3ctool_call>", "\x3cfunction="]
 agent:            # tool-using worker turns
