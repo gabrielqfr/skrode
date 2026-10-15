@@ -1047,3 +1047,44 @@ def test_history_turn_limit_counts_this_call(tmp_path):
 
     assert result.stop == "turn_limit"
     assert result.turns == 1
+
+
+def test_task_message_protected_text():
+    prompts = load_prompts()
+    text = task_message(prompts, _args(), protected="- every test file")
+    assert "- every test file" in text
+    assert "- tests/" not in text
+    assert "- tests/" in task_message(prompts, _args())
+
+
+def test_log_dict_arguments_keeps_non_ascii(tmp_path):
+    ws = _ws(tmp_path)
+    read_call = {
+        "id": "call_read",
+        "function": {"name": "read", "arguments": {"path": "é.py"}},
+    }
+    read_reply = _reply(
+        "",
+        tool_calls=[read_call],
+        usage={"prompt_tokens": 10, "completion_tokens": 5},
+    )
+    done_reply = _reply("done", usage={"prompt_tokens": 10, "completion_tokens": 5})
+    report_reply = _reply(
+        _report("done", "x", []),
+        usage={"prompt_tokens": 1, "completion_tokens": 1},
+    )
+    client = FakeClient([read_reply, done_reply, report_reply])
+    log = tmp_path / "run.jsonl"
+
+    run_worker(
+        _args(),
+        ws,
+        client,
+        model="local",
+        params={"temperature": 1.0},
+        log=log,
+    )
+
+    events = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    event = next(e for e in events if e["event"] == "tool")
+    assert event["arguments"] == '{"path": "é.py"}'

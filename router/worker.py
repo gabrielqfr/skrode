@@ -96,14 +96,17 @@ def bullets(items: list[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
 
 
-def task_message(prompts: dict[str, str], args: dict) -> str:
+def task_message(prompts: dict[str, str], args: dict, protected: str | None = None) -> str:
     criteria = args["acceptance_criteria"]
+    must_not_touch = (
+        bullets(criteria.get("must_not_touch", [])) if protected is None else protected
+    )
     return render(
         prompts,
         "task",
         task=args["task"],
         files=bullets(args["files"]),
-        must_not_touch=bullets(criteria.get("must_not_touch", [])),
+        must_not_touch=must_not_touch,
         commands=bullets(criteria["commands"]),
         max_turns=args.get("max_turns", DEFAULT_MAX_TURNS),
     )
