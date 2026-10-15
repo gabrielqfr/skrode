@@ -31,9 +31,9 @@ path, tool or command.
 | `outside_files` | At the end of an attempt, a changed or untracked path (ignored files excepted) matches nothing in `files` | Yes | Re-brief with the extra path in `files`, or keep the in-scope hunks |
 | `schema_errors` | More than three bad calls in the job: arguments that fail the tool's schema or do not parse, an unknown tool name, a tool call narrated in prose, or a reply cut off by `finish_reason: length` | Yes | Re-brief with a smaller task; repeated cases point at the profile |
 | `rewrite_loop` | A third `write` to the same path within one attempt | Yes | Re-brief naming the lines to change, so `edit` fits |
+| `turn_limit` | An attempt used `max_turns` model calls (40 unless the request sets fewer), and then the checks failed, the worktree had no changes, or the worker's report said `blocked`; there is no retry. The limit outranks the report, which the worker writes after it. If the checks pass and the report does not say `blocked`, the job passes, with a concern noting the limit | Yes | Split the task. If `detail` says no changes, the worker spent its turns reading: name the files and lines in the task |
 | `worker_blocked` | The worker's report says `blocked` | Yes | Answer what its summary says is missing, then re-brief |
 | `no_changes` | The worker stopped and the worktree has no changes | Yes | Passing checks may mean the task was already done, or that they do not test it; failing ones mean the worker gave up |
-| `turn_limit` | An attempt used `max_turns` model calls and the checks then failed; there is no retry. If they pass, the job passes, with a concern noting the limit | Yes | Split the task |
 | `checks_failed` | The checks still fail after `1 + max_retries` attempts | Yes | Read the tail and the branch; fix it or re-brief |
 
 Each bad call is answered with one terse correction (`correction.*` in `prompts/worker.md`); the

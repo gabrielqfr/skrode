@@ -118,7 +118,7 @@ def test_task_message():
     assert "- a.py" in text
     assert "- tests/" in text
     assert "- pytest -q" in text
-    assert "15 turns" in text
+    assert "40 turns" in text
     no_protect = {
         "task": TASK,
         "files": ["a.py"],
@@ -1088,3 +1088,15 @@ def test_log_dict_arguments_keeps_non_ascii(tmp_path):
     events = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     event = next(e for e in events if e["event"] == "tool")
     assert event["arguments"] == '{"path": "é.py"}'
+
+
+def test_default_max_turns_matches_schema():
+    import json
+    from pathlib import Path
+
+    from router.worker import DEFAULT_MAX_TURNS
+
+    schema_path = Path(__file__).resolve().parent.parent / "schemas" / "run_local_subagent.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    assert DEFAULT_MAX_TURNS == 40
+    assert schema["properties"]["max_turns"]["default"] == DEFAULT_MAX_TURNS

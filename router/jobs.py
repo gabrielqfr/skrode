@@ -102,6 +102,10 @@ def _failing(check: CheckResult) -> str:
 def verdict(
     attempt: Attempt, *, number: int, max_attempts: int, max_turns: int
 ) -> tuple[str, str, str]:
+    first_fail = first_failure(attempt.checks)
+    blocked = attempt.report is not None and attempt.report["outcome"] == "blocked"
+    # the report written after the turn limit nearly always says blocked; the limit is the cause
+    turn_limited = attempt.stop == "turn_limit"
     if attempt.stop == "must_not_touch":
         status, reason, detail = "escalate", "must_not_touch", attempt.detail
     elif attempt.scope is not None and attempt.scope[0] == "must_not_touch":
@@ -112,7 +116,16 @@ def verdict(
         status, reason, detail = "escalate", "outside_files", attempt.scope[1]
     elif attempt.stop in ("schema_errors", "rewrite_loop"):
         status, reason, detail = "escalate", attempt.stop, attempt.detail
-    elif attempt.report is not None and attempt.report["outcome"] == "blocked":
+    elif turn_limited and not attempt.changed:
+        status, reason, detail = "escalate", "turn_limit", f"{max_turns} turns, no changes"
+    elif turn_limited and first_fail is not None:
+        status, reason = "escalate", "turn_limit"
+        detail = f"{max_turns} turns, then {_failing(first_fail)}"
+    elif turn_limited and blocked:
+        status, reason, detail = "escalate", "turn_limit", (
+            f"{max_turns} turns; the checks pass, but the worker's report says blocked"
+        )
+    elif blocked:
         status, reason, detail = "escalate", "worker_blocked", (
             "the worker's report says blocked"
         )
@@ -120,18 +133,13 @@ def verdict(
         status, reason, detail = "escalate", "no_changes", "the worktree has no changes"
     elif not attempt.checks:
         status, reason, detail = "failed", "internal", "no checks ran"
+    elif first_fail is None:
+        status, reason, detail = "passed", "", ""
+    elif number >= max_attempts:
+        status, reason = "escalate", "checks_failed"
+        detail = f"{_failing(first_fail)} after {number} attempts"
     else:
-        first_fail = first_failure(attempt.checks)
-        if first_fail is None:
-            status, reason, detail = "passed", "", ""
-        elif attempt.stop == "turn_limit":
-            status, reason = "escalate", "turn_limit"
-            detail = f"{max_turns} turns, then {_failing(first_fail)}"
-        elif number >= max_attempts:
-            status, reason = "escalate", "checks_failed"
-            detail = f"{_failing(first_fail)} after {number} attempts"
-        else:
-            status, reason, detail = "retry", "", ""
+        status, reason, detail = "retry", "", ""
     return status, reason, detail[:DETAIL_LIMIT]
 
 

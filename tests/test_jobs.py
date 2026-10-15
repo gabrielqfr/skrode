@@ -334,3 +334,45 @@ def test_validate_record_message_is_cut():
     message = str(excinfo.value)
     assert message.startswith("invalid record: ")
     assert len(message) <= 216
+
+
+_BLOCKED = {"outcome": "blocked", "summary": "s", "concerns": []}
+
+
+def test_verdict_turn_limit_beats_blocked_failing_checks():
+    attempt = _attempt(stop="turn_limit", report=_BLOCKED, checks=[_check(exit_code=1)])
+    assert _verdict(attempt) == ("escalate", "turn_limit", "15 turns, then `pytest -q` exited 1")
+
+
+def test_verdict_turn_limit_beats_blocked_passing_checks():
+    attempt = _attempt(stop="turn_limit", report=_BLOCKED)
+    assert _verdict(attempt) == (
+        "escalate",
+        "turn_limit",
+        "15 turns; the checks pass, but the worker's report says blocked",
+    )
+
+
+def test_verdict_turn_limit_beats_no_changes():
+    attempt = _attempt(stop="turn_limit", changed=[], report=None)
+    assert _verdict(attempt) == ("escalate", "turn_limit", "15 turns, no changes")
+
+
+def test_verdict_turn_limit_beats_blocked_no_changes():
+    attempt = _attempt(stop="turn_limit", changed=[], report=_BLOCKED, checks=[_check(exit_code=1)])
+    assert _verdict(attempt) == ("escalate", "turn_limit", "15 turns, no changes")
+
+
+def test_verdict_turn_limit_no_report_passing_checks_pass():
+    attempt = _attempt(stop="turn_limit", report=None)
+    assert _verdict(attempt) == ("passed", "", "")
+
+
+def test_verdict_outside_files_beats_turn_limit():
+    attempt = _attempt(stop="turn_limit", report=_BLOCKED, scope=("outside_files", "b.py"))
+    assert _verdict(attempt) == ("escalate", "outside_files", "b.py")
+
+
+def test_verdict_turn_limit_does_not_retry():
+    attempt = _attempt(stop="turn_limit", checks=[_check(exit_code=1)])
+    assert _verdict(attempt, 1)[1] == "turn_limit"

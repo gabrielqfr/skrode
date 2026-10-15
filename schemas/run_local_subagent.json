@@ -62,8 +62,8 @@
       "description": "Model calls per attempt.",
       "type": "integer",
       "minimum": 1,
-      "maximum": 40,
-      "default": 15
+        "maximum": 40,
+        "default": 40
     },
     "max_retries": {
       "description": "Extra attempts after failing checks, each starting from the failing output.",

@@ -32,7 +32,7 @@ REPORT_FORMAT = {
         "schema": {k: v for k, v in REPORT_SCHEMA.items() if k != "$schema"},
     },
 }
-DEFAULT_MAX_TURNS = 15  # the default in schemas/run_local_subagent.json
+DEFAULT_MAX_TURNS = 40  # the default in schemas/run_local_subagent.json
 BAD_CALL_LIMIT = 3  # more than this many bad calls ends the job (schema_errors)
 REWRITE_LIMIT = 3  # a third write to one path ends it (rewrite_loop)
 STOPS = (
