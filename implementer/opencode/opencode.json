@@ -46,7 +46,8 @@
           "*.env": "deny",
           "*.env.*": "deny",
           "*uv.lock": "deny",
-          "*/profiles/*.yaml": "deny"
+          "*profiles/*.yaml": "deny",
+          "*profiles/*.yml": "deny"
         },
         "external_directory": "deny",
         "task": "deny",
