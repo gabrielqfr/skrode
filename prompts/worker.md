@@ -39,7 +39,7 @@ You have at most $max_turns turns for this attempt.
 
 ## retry
 
-The checks failed (attempt $attempt of $max_attempts). `$command` exited $exit_code. Its last lines:
+The checks failed (attempt $attempt of $max_attempts). $failure. Its last lines:
 
 $tail
 

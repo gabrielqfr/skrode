@@ -11,6 +11,7 @@ from router.jobs import Attempt, run_job, verdict
 from router.llm import ChatReply, LLMError
 from router.tools import Workspace
 from router.worker import run_worker
+from router.worktree import WorktreeError
 
 TASK = "Change a.py so the value x becomes 2 instead of 1."
 CHECK = "grep -q 'x = 2' a.py"
@@ -322,6 +323,9 @@ def test_check_artifacts_are_discarded(repo):
     assert record["status"] == "passed"
     assert record["files_changed"] == [{"path": "a.py", "added": 1, "removed": 1}]
     assert sh(repo, "show", f"local-agent/{JOB}:a.py") == "x = 2"
+    assert record["concerns"] == [
+        "the checks changed a.py; the branch has it as it was before the checks ran"
+    ]
 
 
 def test_retry_carries_the_tail(repo):
@@ -366,6 +370,7 @@ def test_retry_sees_earlier_changes(repo):
     assert record["status"] == "passed"
     tool_messages = [m for m in client.bodies[4]["messages"] if m["role"] == "tool"]
     assert "a.py" in tool_messages[-1]["content"]
+    assert " M a.py" in tool_messages[-1]["content"]
     subject = sh(repo, "log", "--format=%s", "-1", f"local-agent/{JOB}")
     assert subject == f"hybrid-router job {JOB} (passed)"
     assert sh(repo, "rev-list", "--count", f"HEAD..local-agent/{JOB}") == "1"
@@ -379,3 +384,104 @@ def test_check_changing_protected_glob_escalates(repo):
     record = _run(repo, client, args)
     assert record["reason"] == "must_not_touch"
     assert record["detail"] == "tests/test_a.py, changed while the checks ran"
+
+
+def test_retry_prompt_names_a_timeout(repo):
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = ["grep -q 'x = 2' a.py || sleep 5"]
+    client = ScriptClient([WRONG_WRITE, done(), W, done()])
+    record = _run(repo, client, args=args, check_timeout_s=1)
+    assert record["status"] == "passed"
+    message = client.bodies[3]["messages"][-1]["content"]
+    assert f"`{CHECK} || sleep 5` timed out" in message
+    assert "exited" not in message
+
+
+def test_retry_prompt_names_the_exit_code(repo):
+    client = ScriptClient([WRONG_WRITE, done(), W, done()])
+    record = _run(repo, client)
+    assert record["status"] == "passed"
+    assert f"`{CHECK}` exited 1" in client.bodies[3]["messages"][-1]["content"]
+
+
+def test_read_only_directory_is_removed(repo):
+    state = repo.parent / "state"
+    client = ScriptClient([W, call("bash", cmd="chmod 555 ."), done()])
+    record = _run(repo, client)
+    assert record["status"] == "passed"
+    assert record["concerns"] == []
+    assert not (state / "worktrees" / JOB).exists()
+    assert sh(repo, "show", f"local-agent/{JOB}:a.py") == "x = 2"
+
+
+def test_remove_failure_keeps_the_verdict(repo, monkeypatch):
+    def boom(*args, **kwargs) -> None:
+        raise WorktreeError("git worktree remove failed: busy")
+
+    monkeypatch.setattr(jobs, "remove", boom)
+    client = ScriptClient([W, done()])
+    record = _run(repo, client)
+    assert record["status"] == "passed"
+    assert record["branch"] == f"local-agent/{JOB}"
+    assert record["concerns"] == [
+        "could not remove the worktree: WorktreeError: git worktree remove failed: busy"
+    ]
+
+
+def test_setup_changing_the_worktree(repo):
+    state = repo.parent / "state"
+    client = ScriptClient([])
+    record = _run(repo, client, setup=("touch stray.txt",))
+    assert record["status"] == "failed"
+    assert record["reason"] == "bad_request"
+    assert record["detail"] == "setup changed stray.txt"
+    assert client.bodies == []
+    assert not (state / "worktrees" / JOB).exists()
+    assert sh(repo, "branch", "--list", f"local-agent/{JOB}") == ""
+
+
+def test_check_changing_a_tracked_file_is_a_concern(repo):
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = [f"echo z >> a.py; {CHECK}"]
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, args)
+    assert record["status"] == "passed"
+    assert record["concerns"] == [
+        "the checks changed a.py; the branch has it as it was before the checks ran"
+    ]
+    assert sh(repo, "show", f"local-agent/{JOB}:a.py") == "x = 2"
+
+
+def test_untracked_check_output_is_not_a_concern(repo):
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = [f"touch out.txt; {CHECK}"]
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, args)
+    assert record["status"] == "passed"
+    assert record["concerns"] == []
+
+
+def test_check_concern_is_per_attempt(repo):
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = [f"{CHECK} || {{ echo z >> a.py; false; }}"]
+    client = ScriptClient([WRONG_WRITE, done(), W, done()])
+    record = _run(repo, client, args)
+    assert record["status"] == "passed"
+    assert record["attempts"] == 2
+    assert record["concerns"] == []
+
+
+def test_check_concern_comes_before_remove_concern(repo, monkeypatch):
+    def boom(*args, **kwargs) -> None:
+        raise WorktreeError("busy")
+
+    monkeypatch.setattr(jobs, "remove", boom)
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = [f"echo z >> a.py; {CHECK}"]
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, args)
+    assert record["status"] == "passed"
+    assert record["concerns"] == [
+        "the checks changed a.py; the branch has it as it was before the checks ran",
+        "could not remove the worktree: WorktreeError: busy",
+    ]

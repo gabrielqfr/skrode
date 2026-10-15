@@ -279,7 +279,7 @@ def prompt_sections() -> dict[str, str]:
 PLACEHOLDERS = {
     "system": set(),
     "task": {"task", "files", "must_not_touch", "commands", "max_turns"},
-    "retry": {"attempt", "max_attempts", "command", "exit_code", "tail", "max_turns"},
+    "retry": {"attempt", "max_attempts", "failure", "tail", "max_turns"},
     "correction.invalid": {"tool", "error"},
     "correction.unknown_tool": {"tool"},
     "correction.narrated": set(),

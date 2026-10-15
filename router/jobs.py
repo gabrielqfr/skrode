@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import os
 import secrets
 import time
 import traceback
@@ -40,6 +41,7 @@ from router.worktree import (
     default_must_not_touch,
     diff_stat,
     discard_changes,
+    git,
     remove,
     resolve_base,
     uncommit,
@@ -130,7 +132,7 @@ def validate_record(record: dict) -> None:
     errors = list(Draft202012Validator(RECORD_SCHEMA).iter_errors(record))
     if errors:
         best = exceptions.best_match(errors)
-        raise ValueError(f"invalid record: {best.message}")
+        raise ValueError(f"invalid record: {best.message[:200]}")
 
 
 def build_record(
@@ -153,6 +155,7 @@ def build_record(
     model: str,
     wall_s: float,
     logs: Path,
+    router_concerns: tuple[str, ...] = (),
 ) -> dict:
     record: dict = {
         "record_version": 1,
@@ -177,6 +180,7 @@ def build_record(
         concerns.append(
             "the last attempt hit the turn limit; the checks pass, but the work may be unfinished"
         )
+    concerns.extend(router_concerns)
     if report is None and report_error:
         concerns.append(f"no worker report: {report_error}")
     if report is not None:
@@ -199,6 +203,27 @@ def build_record(
 
 def _error_line(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}".strip().splitlines()[-1]
+
+
+def _make_writable(root: Path) -> None:
+    # a worker can leave a read-only directory, which git worktree remove cannot empty
+    root.chmod(root.stat().st_mode | 0o700)
+    for dirpath, dirnames, _ in os.walk(root):
+        for name in dirnames:
+            path = Path(dirpath, name)
+            if not path.is_symlink():
+                path.chmod(path.stat().st_mode | 0o700)
+
+
+def _remove_keeping_verdict(
+    repo: Path, worktree: Path, job_id: str, *, keep_branch: bool
+) -> str:
+    try:
+        _make_writable(worktree)
+        remove(repo, worktree, job_id, keep_branch=keep_branch)
+    except (WorktreeError, OSError) as error:
+        return f"could not remove the worktree: {_error_line(error)}"
+    return ""
 
 
 def run_job(
@@ -289,6 +314,11 @@ def run_job(
                 remove(repo, worktree, job_id, keep_branch=False)
                 worktree = None
                 return failed("bad_request", f"setup failed: {_failing(check)}")
+        changed_by_setup = changed_paths(worktree, base_commit)
+        if changed_by_setup:
+            remove(repo, worktree, job_id, keep_branch=False)
+            worktree = None
+            return failed("bad_request", f"setup changed {changed_by_setup[0]}")
         workspace = Workspace(
             root=worktree, files=files, must_not_touch=must_not_touch, sandbox=sandbox
         )
@@ -304,6 +334,7 @@ def run_job(
         ]
         while True:
             attempts += 1
+            check_concern = ""
             result = run_worker(
                 args,
                 workspace,
@@ -340,6 +371,15 @@ def run_job(
                     if matches(path, must_not_touch):
                         scope = ("must_not_touch", f"{path}, changed while the checks ran")
                         break
+                tracked = git(
+                    worktree, "diff", "--name-only", "-z", "--no-renames", "HEAD"
+                )
+                names = [p for p in tracked.split("\0") if p]
+                if names:
+                    check_concern = (
+                        f"the checks changed {names[0]}; the branch has it as it was before "
+                        f"the checks ran"
+                    )
                 discard_changes(worktree)
                 uncommit(worktree, base_commit)
             status, reason, detail = verdict(
@@ -367,8 +407,7 @@ def run_job(
                         "retry",
                         attempt=attempts,
                         max_attempts=max_attempts,
-                        command=failing.command,
-                        exit_code=failing.exit_code,
+                        failure=_failing(failing),
                         tail=failing.tail,
                         max_turns=max_turns,
                     ),
@@ -378,7 +417,9 @@ def run_job(
             worktree, base_commit, f"hybrid-router job {job_id} ({status})"
         )
         files_changed, diffstat = diff_stat(worktree, base_commit)
-        remove(repo, worktree, job_id, keep_branch=has_changes)
+        removal_concern = _remove_keeping_verdict(
+            repo, worktree, job_id, keep_branch=has_changes
+        )
         worktree = None
         return build_record(
             job_id=job_id,
@@ -392,6 +433,7 @@ def run_job(
             report=result.report,
             report_error=result.report_error,
             turn_limited=result.stop == "turn_limit",
+            router_concerns=tuple(c for c in (check_concern, removal_concern) if c),
             files_changed=files_changed,
             diffstat=diffstat,
             branch=branch_name(job_id) if has_changes else None,

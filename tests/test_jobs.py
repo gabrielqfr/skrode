@@ -13,6 +13,7 @@ from router.jobs import (
     build_record,
     new_job_id,
     protected_text,
+    validate_record,
     verdict,
 )
 
@@ -246,3 +247,90 @@ def test_record_failed_without_branch():
 def test_record_invalid_raises():
     with pytest.raises(ValueError, match=r"^invalid record: "):
         _record(status="passed", checks=[_check(exit_code=1)])
+
+
+def test_verdict_must_not_touch_stop_beats_scope():
+    attempt = _attempt(
+        stop="must_not_touch", detail="tests/a.py", scope=("must_not_touch", "tests/b.py")
+    )
+    assert _verdict(attempt) == ("escalate", "must_not_touch", "tests/a.py")
+
+
+def test_verdict_schema_errors_beats_blocked():
+    attempt = _attempt(
+        stop="schema_errors",
+        detail="4 bad calls",
+        report={"outcome": "blocked", "summary": "s", "concerns": []},
+    )
+    assert _verdict(attempt) == ("escalate", "schema_errors", "4 bad calls")
+
+
+def test_verdict_blocked_beats_no_changes():
+    attempt = _attempt(
+        report={"outcome": "blocked", "summary": "s", "concerns": []},
+        changed=[],
+        checks=[],
+    )
+    assert _verdict(attempt) == ("escalate", "worker_blocked", "the worker's report says blocked")
+
+
+def test_verdict_turn_limit_on_last_attempt():
+    attempt = _attempt(stop="turn_limit", checks=[_check(exit_code=1)])
+    assert _verdict(attempt, 3) == (
+        "escalate", "turn_limit", "15 turns, then `pytest -q` exited 1"
+    )
+
+
+def test_protected_text_at_the_limit():
+    paths = [f"tests/t{i}.py" for i in range(20)]
+    assert protected_text(paths) == "\n".join(f"- {p}" for p in paths)
+
+
+def test_protected_text_long_list_exact():
+    assert protected_text([f"tests/t{i}.py" for i in range(21)]) == (
+        "- every test file tracked at the base commit that is not in the list above "
+        "(21 paths): anything under a tests/ or test/ directory, or named test_*, *_test.*, "
+        "*.test.* or *.spec.*"
+    )
+
+
+def test_record_cuts():
+    record = _record(
+        report={"outcome": "done", "summary": "s" * 1500, "concerns": ["c" * 300]},
+        logs=Path("/" + "l" * 400),
+    )
+    assert len(record["summary"]) == 1000
+    assert record["concerns"] == ["c" * 200]
+    assert len(record["logs"]) == 300
+
+
+def test_record_report_and_report_error():
+    record = _record(report_error="ignored")
+    assert record["concerns"] == ["check b"]
+
+
+def test_record_local_tokens():
+    record = _record(tokens={"completion": 20, "prompt": 100})
+    assert list(record["local_tokens"].items()) == [("prompt", 100), ("completion", 20)]
+
+
+def test_record_router_concerns_order():
+    record = _record(
+        turn_limited=True,
+        router_concerns=("r1",),
+        report=None,
+        report_error="bad json",
+    )
+    assert record["concerns"] == [
+        "the last attempt hit the turn limit; the checks pass, but the work may be unfinished",
+        "r1",
+        "no worker report: bad json",
+    ]
+
+
+def test_validate_record_message_is_cut():
+    with pytest.raises(ValueError) as excinfo:
+        validate_record({**_record(), "job_id": "x" * 500})
+    message = str(excinfo.value)
+    assert message.startswith("invalid record: ")
+    assert len(message) <= 216

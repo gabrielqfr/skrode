@@ -14,7 +14,8 @@ shape is `schemas/job_record.json`. The messages the worker sees are in `prompts
 The worker's output is untrusted. Its claim of failure is believed: `blocked` in its report
 escalates even when the checks pass. Its claim of success is not: `done` counts for nothing until
 the checks pass. Partial work is kept: whenever the worktree has changes, the record names the
-branch, whatever the status.
+branch, whatever the status, except `internal`, where the router deletes the branch with the
+worktree.
 
 There is no failover. A job that cannot finish on the local model ends here; it is never retried on
 a hosted model.
@@ -26,7 +27,7 @@ path, tool or command.
 
 | Reason | Trigger | Checks run? | Likely next step |
 | --- | --- | --- | --- |
-| `must_not_touch` | A `write` or `edit` aimed at a protected path, or a protected path changed in the worktree at the end of an attempt (by `bash`, say). The attempt stops at once, with no retry | No | Discard. If the protected file really must change, it is Claude's task |
+| `must_not_touch` | A `write` or `edit` aimed at a protected path, a protected path changed in the worktree at the end of an attempt (by `bash`, say), or one changed by the checks while they ran. The attempt stops at once, with no retry | No, unless the checks made the change | Discard. If the protected file really must change, it is Claude's task |
 | `outside_files` | At the end of an attempt, a changed or untracked path (ignored files excepted) matches nothing in `files` | Yes | Re-brief with the extra path in `files`, or keep the in-scope hunks |
 | `schema_errors` | More than three bad calls in the job: arguments that fail the tool's schema or do not parse, an unknown tool name, a tool call narrated in prose, or a reply cut off by `finish_reason: length` | Yes | Re-brief with a smaller task; repeated cases point at the profile |
 | `rewrite_loop` | A third `write` to the same path within one attempt | Yes | Re-brief naming the lines to change, so `edit` fits |
@@ -44,11 +45,19 @@ Retries happen only when the checks fail and no guard was tripped. Each retry is
 same conversation, carrying the last 200 lines of the first failing check (`retry` in
 `prompts/worker.md`), with a fresh `max_turns`.
 
+The checks run on a snapshot of the attempt's work. Whatever they change in the worktree is then
+discarded (ignored files such as a prepared `.venv` stay), so the branch holds the worker's work,
+not the checks' side effects. When a check changed a tracked file, the record says so in a
+concern: the branch has that file as it was before the checks ran.
+
+The router removes the worktree when the job ends. If that fails (a read-only directory the worker
+made, say), the verdict stands and a concern says the worktree is still on disk.
+
 ## Failure reasons
 
 | Reason | Trigger |
 | --- | --- |
-| `bad_request` | Arguments fail `schemas/run_local_subagent.json`, `repo` is not a git repo, `base` does not resolve, or a path is in both `files` and `must_not_touch` |
+| `bad_request` | Arguments fail `schemas/run_local_subagent.json`, `repo` is not a git repo, `base` does not resolve, a path is in both `files` and `must_not_touch`, or a setup command (the router's own, run before the worker) fails or leaves a changed or untracked file |
 | `endpoint` | The model server on `127.0.0.1` is down or keeps returning errors |
 | `timeout` | The job ran past its wall-clock limit |
 | `cancelled` | `cancel_job` was called |
