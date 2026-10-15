@@ -129,6 +129,18 @@ def commit_all(worktree: Path, base_commit: str, message: str) -> bool:
     raise _failure(("diff", "--quiet", base_commit, "HEAD"), diff)
 
 
+def discard_changes(worktree: Path) -> None:
+    # ignored files (a prepared .venv, caches) stay; only tracked and untracked changes go
+    git(worktree, "reset", "-q", "--hard", "HEAD")
+    git(worktree, "clean", "-fdq")
+
+
+def uncommit(worktree: Path, base_commit: str) -> None:
+    # a mixed reset keeps the files but drops the attempt's commit, so a retrying worker's
+    # git status and git diff show all of its work
+    git(worktree, "reset", "-q", base_commit)
+
+
 def diff_stat(worktree: Path, base_commit: str) -> tuple[list[dict], str]:
     numstat = git(worktree, "diff", "--numstat", "-z", "--no-renames", base_commit, "HEAD")
     files_changed: list[dict] = []

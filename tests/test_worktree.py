@@ -276,3 +276,17 @@ def test_remove(tmp_path, repo: tuple[Path, str]) -> None:
     wt_drop = create(root, base, "j-abc456", tmp_path / "wt2")
     remove(root, wt_drop, "j-abc456", keep_branch=False)
     assert sh(root, "branch", "--list", "local-agent/j-abc456") == ""
+
+
+def test_discard_changes_keeps_ignored_files(repo):
+    root, _ = repo
+    (root / "a.py").write_text("changed\n")
+    (root / "new.txt").write_text("n\n")
+    (root / "sub").mkdir()
+    (root / "sub" / "f.txt").write_text("f\n")
+    (root / "keep.log").write_text("k\n")
+    worktree.discard_changes(root)
+    assert (root / "a.py").read_text() == "a\n"
+    assert not (root / "new.txt").exists()
+    assert not (root / "sub").exists()
+    assert (root / "keep.log").read_text() == "k\n"

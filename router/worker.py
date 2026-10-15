@@ -160,6 +160,7 @@ def run_worker(
     narrated_markers: tuple[str, ...] = (),
     log: Path | None = None,
     history: list[dict] | None = None,
+    bad_calls_before: int = 0,
 ) -> WorkerResult:
     if prompts is None:
         prompts = load_prompts()
@@ -172,7 +173,7 @@ def run_worker(
     else:
         messages = list(history)
     turns = 0
-    bad_calls = 0
+    bad_calls = bad_calls_before
     tokens: dict[str, int] = {"prompt": 0, "completion": 0}
     write_counts: dict[str, int] = {}
     stop = "finished"
