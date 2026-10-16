@@ -12,18 +12,15 @@ without lowering quality, and to show that with a public benchmark.
 
 | Path | What it is |
 | --- | --- |
-| `router/` | The package. `benchtask.py` turns an eval task folder into `run_local_subagent` arguments for the bench. Coming with the worker loop: `llm.py`, `profiles.py`, `tools.py`, `worker.py`, then `worktree.py`, `acceptance.py`, `jobs.py`, then `server.py`, `cli.py` |
+| `router/` | The package. The job: `worker.py` (the agent loop over `llm.py` and the five `tools.py`, shaped by `profiles.py`), `worktree.py`, `acceptance.py`, `jobs.py` (`run_job`). Serving it: `server.py` (MCP tools), `manager.py` (jobs at once), `stats.py`, `config.py` (the user's per-repo setup), `cli.py`. The bench: `benchtask.py` (task folder to arguments), `benchprep.py` (a clone, base commit and config per task) |
 | `tests/` | pytest. Tests never need a model server or the network: fake the HTTP endpoint |
 | `scripts/verify.sh` | The checks every change must pass, with bounded output |
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
 | `implementer/opencode/` | That implementer's opencode config and rules, loaded through `XDG_CONFIG_HOME` so no global opencode config applies |
-
 | `schemas/` | JSON Schemas: `run_local_subagent` arguments, the job record, the worker's five tools and its report, model profiles. `examples/` holds records the tests validate |
 | `prompts/worker.md` | Every message sent to the local model, one `## <name>` section each. Load it as written; never reword it in code |
 | `docs/escalation.md` | When a job ends `passed`, `escalate` or `failed`, and each reason's trigger |
-
-Coming with the worker loop: `profiles/` (one YAML per served model alias, checked against
-`schemas/profile.json`).
+| `profiles/` | One YAML per served model alias, checked against `schemas/profile.json` |
 
 ## Non-negotiables
 
