@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
@@ -291,6 +291,7 @@ def _run_job(
     state_dir: Path = STATE_DIR,
     job_id: str | None = None,
     setup: tuple[str, ...] = (),
+    setups: Mapping[Path, tuple[str, ...]] | None = None,
     sandbox: bool = True,
     check_timeout_s: int = CHECK_TIMEOUT_S,
     should_stop: Callable[[], str | None] | None = None,
@@ -357,6 +358,8 @@ def _run_job(
         worktree = create(repo, base_commit, job_id, state_dir / "worktrees")
         # setup is the router's own config, not the request: it runs unsandboxed so it can
         # reach the network (uv sync) before the worker starts
+        if setups is not None:
+            setup = (*setup, *setups.get(repo.resolve(), ()))
         for i, command in enumerate(setup, start=1):
             check = run_check(
                 worktree,
@@ -535,6 +538,7 @@ def run_job(
     state_dir: Path = STATE_DIR,
     job_id: str | None = None,
     setup: tuple[str, ...] = (),
+    setups: Mapping[Path, tuple[str, ...]] | None = None,
     sandbox: bool = True,
     check_timeout_s: int = CHECK_TIMEOUT_S,
     should_stop: Callable[[], str | None] | None = None,
@@ -552,6 +556,7 @@ def run_job(
         state_dir=state_dir,
         job_id=job_id,
         setup=setup,
+        setups=setups,
         sandbox=sandbox,
         check_timeout_s=check_timeout_s,
         should_stop=should_stop,

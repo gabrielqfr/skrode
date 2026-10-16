@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from router.config import CONFIG_PATH, ConfigError, load_config
 from router.jobs import STATE_DIR, run_job
 from router.llm import DEFAULT_BASE_URL, LLMClient
 from router.manager import JobManager
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-dir", default=None)
     parser.add_argument("--no-sandbox", action="store_true")
     parser.add_argument("--jobs", type=int, default=1)
+    parser.add_argument("--config", default=None)
     ns = parser.parse_args(argv)
 
     if ns.jobs < 1:
@@ -75,6 +77,15 @@ def main(argv: list[str] | None = None) -> int:
         client = LLMClient(ns.base_url)
     except ValueError as error:
         print(f"bad base url: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        if ns.config is None:
+            setups = load_config(CONFIG_PATH)
+        else:
+            setups = load_config(Path(ns.config), required=True)
+    except ConfigError as error:
+        print(f"bad config: {error}", file=sys.stderr)
         return 2
 
     state_dir = Path(ns.state_dir) if ns.state_dir else STATE_DIR
@@ -95,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         params=params,
         narrated_markers=tuple(profile.get("narrated_markers", [])),
         state_dir=state_dir,
+        setups=setups,
         sandbox=not ns.no_sandbox,
     )
 

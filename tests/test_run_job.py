@@ -246,6 +246,56 @@ def test_setup_runs_before_the_worker(repo: Path) -> None:
     assert (state / "jobs" / JOB / "setup-1.log").exists()
 
 
+def test_the_repos_configured_setup_runs_before_the_worker(repo: Path) -> None:
+    state = repo.parent / "state"
+    args = _args(repo)
+    args["acceptance_criteria"]["commands"] = ["test -f .setup-done", CHECK]
+    client = ScriptClient([W, done()])
+    setups = {repo.resolve(): ("touch .setup-done",)}
+    record = _run(repo, client, args=args, setups=setups)
+    assert record["status"] == "passed"
+    assert (state / "jobs" / JOB / "setup-1.log").exists()
+
+
+def test_a_repo_reached_through_a_symlink_gets_its_setup(repo: Path) -> None:
+    link = repo.parent / "link"
+    link.symlink_to(repo)
+    args = _args(link)
+    args["acceptance_criteria"]["commands"] = ["test -f .setup-done", CHECK]
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, args=args, setups={repo.resolve(): ("touch .setup-done",)})
+    assert record["status"] == "passed"
+
+
+def test_another_repos_setup_does_not_run(repo: Path) -> None:
+    state = repo.parent / "state"
+    client = ScriptClient([W, done()])
+    setups = {(repo.parent / "other").resolve(): ("exit 3",)}
+    record = _run(repo, client, setups=setups)
+    assert record["status"] == "passed"
+    assert not (state / "jobs" / JOB / "setup-1.log").exists()
+
+
+def test_given_setup_runs_before_the_configured_one(repo: Path) -> None:
+    state = repo.parent / "state"
+    client = ScriptClient([W, done()])
+    setups = {repo.resolve(): ("test -f .setup-done",)}
+    record = _run(repo, client, setup=("touch .setup-done",), setups=setups)
+    assert record["status"] == "passed"
+    assert (state / "jobs" / JOB / "setup-2.log").exists()
+
+
+def test_a_failing_configured_setup_fails_the_job(repo: Path) -> None:
+    state = repo.parent / "state"
+    client = ScriptClient([])
+    record = _run(repo, client, setups={repo.resolve(): ("exit 3",)})
+    assert record["status"] == "failed"
+    assert record["reason"] == "bad_request"
+    assert record["detail"] == "setup failed: `exit 3` exited 3"
+    assert client.bodies == []
+    assert not (state / "worktrees" / JOB).exists()
+
+
 def test_setup_failure(repo: Path) -> None:
     state = repo.parent / "state"
     client = ScriptClient([])

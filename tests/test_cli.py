@@ -27,8 +27,10 @@ TOOLS = [
 
 
 @pytest.fixture
-def fakes(monkeypatch):
+def fakes(monkeypatch, tmp_path):
     """Replaces JobManager and serve, recording what main builds; no job ever runs."""
+    # never the user's own config file
+    monkeypatch.setattr(cli, "CONFIG_PATH", tmp_path / "no-config.toml")
     made = {"managers": [], "served": [], "endpoints": []}
 
     class FakeManager:
@@ -82,6 +84,7 @@ def test_main_serves_a_manager_bound_to_the_profile(fakes, tmp_path):
         "params": request_params(profile, "agent"),
         "narrated_markers": tuple(profile["narrated_markers"]),
         "state_dir": state,
+        "setups": {},
         "sandbox": False,
     }
 
@@ -182,6 +185,45 @@ def test_the_manager_closes_when_serving_fails(fakes, monkeypatch, tmp_path):
     assert manager.closed is True
 
 
+def test_main_reads_the_users_config_by_default(fakes, monkeypatch, tmp_path):
+    config = tmp_path / "config.toml"
+    config.write_text(f'[[repo]]\npath = "{tmp_path}"\nsetup = ["uv sync --frozen"]\n')
+    monkeypatch.setattr(cli, "CONFIG_PATH", config)
+    assert cli.main(["--state-dir", str(tmp_path / "state")]) == 0
+    [manager] = fakes["managers"]
+    assert manager.run.keywords["setups"] == {tmp_path.resolve(): ("uv sync --frozen",)}
+
+
+def test_main_reads_the_config_the_flag_names(fakes, tmp_path):
+    config = tmp_path / "bench.toml"
+    config.write_text(f'[[repo]]\npath = "{tmp_path}"\nsetup = ["make deps"]\n')
+    argv = ["--state-dir", str(tmp_path / "state"), "--config", str(config)]
+    assert cli.main(argv) == 0
+    [manager] = fakes["managers"]
+    assert manager.run.keywords["setups"] == {tmp_path.resolve(): ("make deps",)}
+
+
+def test_a_missing_config_the_flag_names_exits_2(fakes, tmp_path, capsys):
+    config = tmp_path / "bench.toml"
+    argv = ["--state-dir", str(tmp_path / "state"), "--config", str(config)]
+    assert cli.main(argv) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == f"bad config: {config} does not exist\n"
+    assert fakes["managers"] == []
+
+
+def test_a_bad_config_exits_2_before_serving(fakes, monkeypatch, tmp_path, capsys):
+    config = tmp_path / "config.toml"
+    config.write_text("repos = []\n")
+    monkeypatch.setattr(cli, "CONFIG_PATH", config)
+    assert cli.main(["--state-dir", str(tmp_path / "state")]) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == f"bad config: {config}: unknown key 'repos'\n"
+    assert fakes["managers"] == []
+
+
 def test_an_unknown_profile_exits_2_before_serving(fakes, tmp_path, capsys):
     assert cli.main(["--profile", "no-such-profile", "--state-dir", str(tmp_path)]) == 2
     out, err = capsys.readouterr()
@@ -232,9 +274,11 @@ def test_the_cli_module_does_not_import_mcp():
 
 @pytest.mark.parametrize("mode", ["legacy", "2026-07-28"])
 def test_the_command_lists_the_tools_over_stdio(tmp_path, mode):
+    config = tmp_path / "config.toml"
+    config.write_text("")
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "router.cli", "--state-dir", str(tmp_path)],
+        args=["-m", "router.cli", "--state-dir", str(tmp_path), "--config", str(config)],
         cwd=str(REPO),
     )
 
@@ -246,8 +290,10 @@ def test_the_command_lists_the_tools_over_stdio(tmp_path, mode):
 
 
 def test_closing_stdin_ends_the_command_cleanly(tmp_path):
+    config = tmp_path / "config.toml"
+    config.write_text("")
     done = subprocess.run(
-        [sys.executable, "-m", "router.cli", "--state-dir", str(tmp_path)],
+        [sys.executable, "-m", "router.cli", "--state-dir", str(tmp_path), "--config", str(config)],
         input="",
         capture_output=True,
         text=True,
