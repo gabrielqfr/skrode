@@ -27,10 +27,13 @@ Coming with the worker loop: `profiles/` (one YAML per served model alias, check
 
 ## Non-negotiables
 
-1. **Local only.** The worker talks to `127.0.0.1` and nothing else. No hosted model, no other
-   network access, in the worker or in tests.
-2. **No failover.** When the local model cannot finish, the job ends as `failed` or `escalate`
-   with a short record. It never retries on a hosted model.
+1. **Local by default.** The worker talks to `127.0.0.1` unless the user configures another
+   endpoint; until a spec opens that, the check in `router/llm.py` stays. Tests never use the
+   network.
+2. **No silent failover.** A job runs on the worker that the caller or the user's configuration
+   names. When it cannot finish, it ends as `failed` or `escalate` with a short record; it moves
+   to another model only when the user's configuration says so, and the record names every
+   model that ran.
 3. **Exit 0 is not verification.** A job passes only when its acceptance commands pass in its own
    worktree, run by the router, not as reported by the model.
 4. **Hands off Anthropic.** The router never reads, stores or forwards Anthropic credentials, and
