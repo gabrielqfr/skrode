@@ -1,6 +1,7 @@
 """Tests for router.llm: the chat-completion client for the local model server."""
 
 import contextlib
+import http.client
 import json
 import socket
 import threading
@@ -359,6 +360,7 @@ def test_health_is_loading_on_503():
         urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")),
         TimeoutError("timed out"),
         ConnectionResetError(104, "Connection reset by peer"),
+        http.client.BadStatusLine("not http"),
     ],
 )
 def test_health_is_down_on_any_other_failure(error):
