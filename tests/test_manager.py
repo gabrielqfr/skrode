@@ -260,3 +260,58 @@ def test_submit_racing_close_is_refused(manager, monkeypatch):
         "job_id": "j-20261015-abcdef",
         "state": "unknown",
     }
+
+
+def test_two_slots_run_two_jobs_at_once_in_order(fake, clock, tmp_path):
+    manager = JobManager(
+        fake, profile_name="test-profile", state_dir=tmp_path, clock=clock, concurrency=2
+    )
+    try:
+        first = manager.submit({"task": "a"})
+        second = manager.submit({"task": "b"})
+        third = manager.submit({"task": "c"})
+        started = {fake.started.get(timeout=5), fake.started.get(timeout=5)}
+        assert started == {first, second}
+        assert manager.status(first)["state"] == "running"
+        assert manager.status(second)["state"] == "running"
+        assert manager.status(third) == {"job_id": third, "state": "queued", "ahead": 2}
+        fake.finish(second)
+        assert fake.started.get(timeout=5) == third
+        assert manager.status(first)["state"] == "running"
+        assert manager.status(second)["state"] == "done"
+        fake.finish(first)
+        fake.finish(third)
+        states = manager.wait([first, second, third], 5)
+        assert [s["state"] for s in states] == ["done", "done", "done"]
+    finally:
+        manager.close()
+
+
+def test_the_default_is_one_job_at_a_time(fake, tmp_path):
+    manager = JobManager(fake, profile_name="test-profile", state_dir=tmp_path)
+    assert manager.concurrency == 1
+    manager.close()
+
+
+@pytest.mark.parametrize("concurrency", [0, -1])
+def test_concurrency_below_one_is_refused(fake, tmp_path, concurrency):
+    with pytest.raises(ValueError, match=f"concurrency must be at least 1, not {concurrency}"):
+        JobManager(
+            fake, profile_name="test-profile", state_dir=tmp_path, concurrency=concurrency
+        )
+
+
+def test_close_cancels_every_running_job(fake, clock, tmp_path):
+    manager = JobManager(
+        fake, profile_name="test-profile", state_dir=tmp_path, clock=clock, concurrency=2
+    )
+    first = manager.submit({"task": "a"})
+    second = manager.submit({"task": "b"})
+    third = manager.submit({"task": "c"})
+    started = {fake.started.get(timeout=5), fake.started.get(timeout=5)}
+    assert started == {first, second}
+    manager.close()
+    assert manager.status(first)["record"]["reason"] == "cancelled"
+    assert manager.status(second)["record"]["reason"] == "cancelled"
+    assert manager.status(third)["record"]["detail"] == "cancelled while queued"
+    assert fake.started.empty()

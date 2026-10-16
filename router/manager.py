@@ -1,4 +1,4 @@
-"""The MCP server's job queue: one job at a time, first in first out (one GPU, one model)."""
+"""The MCP server's job queue: first in first out, N jobs at once (default 1: one GPU slot)."""
 
 import contextlib
 import threading
@@ -46,19 +46,27 @@ class JobManager:
         state_dir: Path = STATE_DIR,
         job_timeout_s: float = JOB_TIMEOUT_S,
         clock: Callable[[], float] = time.monotonic,
+        concurrency: int = 1,
     ) -> None:
+        if concurrency < 1:
+            raise ValueError(f"concurrency must be at least 1, not {concurrency}")
         self._run = run
         self.profile_name = profile_name
         self.state_dir = state_dir
         self.job_timeout_s = job_timeout_s
         self._clock = clock
+        self.concurrency = concurrency
         self._jobs: dict[str, _Job] = {}
         self._queue: deque[str] = deque()
-        self._running: str | None = None
+        self._running: list[str] = []  # job ids, in the order they started
         self._closed = False
         self._cond = threading.Condition()
-        self._thread = threading.Thread(target=self._loop, name="job-manager", daemon=True)
-        self._thread.start()
+        self._threads = [
+            threading.Thread(target=self._loop, name=f"job-manager-{n}", daemon=True)
+            for n in range(concurrency)
+        ]
+        for thread in self._threads:
+            thread.start()
 
     def submit(self, args: dict) -> str:
         job_id = new_job_id()
@@ -77,9 +85,7 @@ class JobManager:
             job = self._jobs.get(job_id)
             if job is not None:
                 if job.state == "queued":
-                    ahead = list(self._queue).index(job.job_id) + (
-                        1 if self._running is not None else 0
-                    )
+                    ahead = list(self._queue).index(job.job_id) + len(self._running)
                     return {"job_id": job_id, "state": "queued", "ahead": ahead}
                 if job.state == "running":
                     return {
@@ -133,10 +139,13 @@ class JobManager:
                 job = self._jobs[self._queue.popleft()]
                 job.record = self._stored_failure(job, "cancelled", "cancelled while queued")
                 job.state = "done"
-            if self._running is not None:
-                self._jobs[self._running].cancel = True
+            for job_id in self._running:
+                self._jobs[job_id].cancel = True
             self._cond.notify_all()
-        self._thread.join(timeout_s)
+        # one deadline for every thread, so close() waits timeout_s in all
+        deadline = time.monotonic() + timeout_s
+        for thread in self._threads:
+            thread.join(max(0.0, deadline - time.monotonic()))
 
     def _stored_failure(self, job: _Job, reason: str, detail: str) -> dict:
         record = build_record(
@@ -186,7 +195,7 @@ class JobManager:
                 job.state = "running"
                 job.started = self._clock()
                 job.progress = "starting"
-                self._running = job_id
+                self._running.append(job_id)
             try:
                 result = self._run(
                     job.args,
@@ -199,5 +208,5 @@ class JobManager:
             with self._cond:
                 self._jobs[job_id].record = result
                 self._jobs[job_id].state = "done"
-                self._running = None
+                self._running.remove(job_id)
                 self._cond.notify_all()

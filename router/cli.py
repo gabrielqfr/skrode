@@ -16,7 +16,7 @@ DEFAULT_PROFILE = "bonsai2-27b"
 DEFAULT_MODEL = "local"  # the alias llama-server serves the profile's model under
 
 
-def endpoints(client: LLMClient, *, model: str, profile: str) -> list[dict]:
+def endpoints(client: LLMClient, *, model: str, profile: str, jobs: int) -> list[dict]:
     """The one endpoint this command serves jobs on, for the list_endpoints tool."""
     return [
         {
@@ -24,6 +24,7 @@ def endpoints(client: LLMClient, *, model: str, profile: str) -> list[dict]:
             "base_url": client.base_url,
             "model": model,
             "profile": profile,
+            "jobs": jobs,
             "health": client.health(),
         }
     ]
@@ -56,7 +57,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--state-dir", default=None)
     parser.add_argument("--no-sandbox", action="store_true")
+    parser.add_argument("--jobs", type=int, default=1)
     ns = parser.parse_args(argv)
+
+    if ns.jobs < 1:
+        print(f"bad jobs: --jobs must be at least 1, not {ns.jobs}", file=sys.stderr)
+        return 2
 
     try:
         profile = load_profile(ns.profile)
@@ -92,11 +98,15 @@ def main(argv: list[str] | None = None) -> int:
         sandbox=not ns.no_sandbox,
     )
 
-    manager = JobManager(run, profile_name=ns.profile, state_dir=state_dir)
+    manager = JobManager(
+        run, profile_name=ns.profile, state_dir=state_dir, concurrency=ns.jobs
+    )
     try:
         serve(
             manager,
-            functools.partial(endpoints, client, model=ns.model, profile=ns.profile),
+            functools.partial(
+                endpoints, client, model=ns.model, profile=ns.profile, jobs=ns.jobs
+            ),
         )
     finally:
         manager.close()

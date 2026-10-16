@@ -64,7 +64,8 @@ DESCRIPTIONS: dict[str, str] = {
     ),
     "list_endpoints": (
         "The model endpoints the router's jobs run on: name, base URL, served model alias, "
-        "profile, and health (ok, loading or down), checked when called."
+        "profile, how many jobs it runs at once, and health (ok, loading or down), checked "
+        "when called."
     ),
 }
 

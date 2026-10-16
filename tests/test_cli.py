@@ -32,10 +32,11 @@ def fakes(monkeypatch):
     made = {"managers": [], "served": [], "endpoints": []}
 
     class FakeManager:
-        def __init__(self, run, *, profile_name, state_dir):
+        def __init__(self, run, *, profile_name, state_dir, concurrency):
             self.run = run
             self.profile_name = profile_name
             self.state_dir = state_dir
+            self.concurrency = concurrency
             self.closed = False
             made["managers"].append(self)
 
@@ -90,6 +91,7 @@ def test_main_defaults_to_the_sandbox_and_the_user_state_dir(fakes, monkeypatch,
     assert cli.main([]) == 0
     [manager] = fakes["managers"]
     assert manager.state_dir == tmp_path / "default"
+    assert manager.concurrency == 1
     assert manager.run.keywords["sandbox"] is True
     assert manager.run.keywords["model"] == "local"
     assert manager.run.keywords["client"].base_url == "http://127.0.0.1:8080"
@@ -107,7 +109,28 @@ def test_main_serves_the_endpoint_list_bound_to_its_client(fakes, tmp_path):
     assert isinstance(list_endpoints, functools.partial)
     assert list_endpoints.func is cli.endpoints
     assert list_endpoints.args == (manager.run.keywords["client"],)
-    assert list_endpoints.keywords == {"model": "served-alias", "profile": "bonsai2-27b"}
+    assert list_endpoints.keywords == {
+        "model": "served-alias",
+        "profile": "bonsai2-27b",
+        "jobs": 1,
+    }
+
+
+def test_main_runs_as_many_jobs_at_once_as_asked(fakes, tmp_path):
+    assert cli.main(["--state-dir", str(tmp_path), "--jobs", "3"]) == 0
+    [manager] = fakes["managers"]
+    assert manager.concurrency == 3
+    [list_endpoints] = fakes["endpoints"]
+    assert list_endpoints.keywords["jobs"] == 3
+
+
+@pytest.mark.parametrize("jobs", ["0", "-2"])
+def test_jobs_below_one_exits_2_before_serving(fakes, tmp_path, capsys, jobs):
+    assert cli.main(["--jobs", jobs, "--state-dir", str(tmp_path)]) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err == f"bad jobs: --jobs must be at least 1, not {jobs}\n"
+    assert fakes["managers"] == []
 
 
 class FakeClient:
@@ -124,16 +147,17 @@ class FakeClient:
 
 def test_endpoints_names_the_one_local_endpoint_and_checks_it_each_call():
     client = FakeClient("loading")
-    assert cli.endpoints(client, model="served-alias", profile="some-profile") == [
+    assert cli.endpoints(client, model="served-alias", profile="some-profile", jobs=2) == [
         {
             "name": "local",
             "base_url": "http://127.0.0.1:9999",
             "model": "served-alias",
             "profile": "some-profile",
+            "jobs": 2,
             "health": "loading",
         }
     ]
-    cli.endpoints(client, model="served-alias", profile="some-profile")
+    cli.endpoints(client, model="served-alias", profile="some-profile", jobs=2)
     assert client.calls == 2
 
 
@@ -142,7 +166,7 @@ def test_endpoints_reports_a_server_that_is_not_running():
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     client = LLMClient(f"http://127.0.0.1:{port}")
-    [endpoint] = cli.endpoints(client, model="local", profile="bonsai2-27b")
+    [endpoint] = cli.endpoints(client, model="local", profile="bonsai2-27b", jobs=1)
     assert endpoint["health"] == "down"
     assert endpoint["base_url"] == f"http://127.0.0.1:{port}"
 
