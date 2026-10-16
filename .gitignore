@@ -18,3 +18,7 @@ implementer/opencode/package-lock.json
 implementer/opencode/bun.lock
 # Proofs of concept: bench tooling and their results, kept out of the package and the history.
 /POCs/
+bench/opencode/node_modules/
+bench/opencode/package.json
+bench/opencode/package-lock.json
+bench/opencode/bun.lock
