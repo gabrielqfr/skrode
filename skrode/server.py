@@ -10,9 +10,9 @@ from jsonschema import Draft202012Validator, exceptions
 from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel import Server
 
-from router.jobs import ARGS_SCHEMA, _error_line, load_records
-from router.manager import WAIT_LIMIT_S, JobManager
-from router.stats import summarize
+from skrode.jobs import ARGS_SCHEMA, _error_line, load_records
+from skrode.manager import WAIT_LIMIT_S, JobManager
+from skrode.stats import summarize
 
 PROGRESS_INTERVAL_S = 30.0  # Claude Code drops a stdio call that is silent for 30 minutes
 
@@ -182,4 +182,4 @@ def build_server(
             return _result(await anyio.to_thread.run_sync(list_endpoints))
         return _result({"error": f"unknown tool: {name}"}, error=True)
 
-    return Server("hybrid-router", on_list_tools=list_tools, on_call_tool=call_tool)
+    return Server("skrode", on_list_tools=list_tools, on_call_tool=call_tool)

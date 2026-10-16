@@ -15,9 +15,9 @@ from typing import Protocol
 
 from jsonschema import Draft202012Validator, exceptions
 
-from router.llm import DEFAULT_BASE_URL, ChatReply, LLMClient, LLMError
-from router.profiles import ProfileError, load_profile, request_params
-from router.tools import TOOL_SPECS, Outcome, Workspace
+from skrode.llm import DEFAULT_BASE_URL, ChatReply, LLMClient, LLMError
+from skrode.profiles import ProfileError, load_profile, request_params
+from skrode.tools import TOOL_SPECS, Outcome, Workspace
 
 _REPO = Path(__file__).resolve().parents[1]
 PROMPTS_PATH = _REPO / "prompts" / "worker.md"

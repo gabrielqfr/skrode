@@ -1,4 +1,4 @@
-"""Tests for router.jobs: the verdict and the record, as pure functions."""
+"""Tests for skrode.jobs: the verdict and the record, as pure functions."""
 
 import re
 from datetime import datetime
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from router.acceptance import CheckResult
-from router.jobs import (
+from skrode.acceptance import CheckResult
+from skrode.jobs import (
     RECORD_SCHEMA,
     Attempt,
     build_record,

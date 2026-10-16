@@ -1,4 +1,4 @@
-"""Tests for router.worker: the worker loop, driven by a fake client."""
+"""Tests for skrode.worker: the worker loop, driven by a fake client."""
 
 import contextlib
 import copy
@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from router.llm import ChatReply, LLMError
-from router.profiles import load_profile, request_params
-from router.tools import TOOL_SPECS, Workspace
-from router.worker import (
+from skrode.llm import ChatReply, LLMError
+from skrode.profiles import load_profile, request_params
+from skrode.tools import TOOL_SPECS, Workspace
+from skrode.worker import (
     LOG_TEXT_LIMIT,
     REPORT_FORMAT,
     WorkerResult,
@@ -766,7 +766,7 @@ def test_cli_passes_profile_markers(tmp_path, monkeypatch):
         recorded.append(kwargs)
         return WorkerResult("finished", "", 0, 0, {"prompt": 0, "completion": 0}, {}, "")
 
-    monkeypatch.setattr("router.worker.run_worker", fake_worker)
+    monkeypatch.setattr("skrode.worker.run_worker", fake_worker)
     args_path = _args_file(tmp_path)
     code = main(
         [
@@ -1094,7 +1094,7 @@ def test_default_max_turns_matches_schema():
     import json
     from pathlib import Path
 
-    from router.worker import DEFAULT_MAX_TURNS
+    from skrode.worker import DEFAULT_MAX_TURNS
 
     schema_path = Path(__file__).resolve().parent.parent / "schemas" / "run_local_subagent.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))

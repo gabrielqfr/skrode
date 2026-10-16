@@ -16,7 +16,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, exceptions
 
-from router.acceptance import (
+from skrode.acceptance import (
     CHECK_TIMEOUT_S,
     CheckResult,
     first_failure,
@@ -25,10 +25,10 @@ from router.acceptance import (
     run_checks,
     scope_violation,
 )
-from router.llm import DEFAULT_BASE_URL, LLMClient
-from router.profiles import ProfileError, load_profile, request_params
-from router.tools import Workspace, matches
-from router.worker import (
+from skrode.llm import DEFAULT_BASE_URL, LLMClient
+from skrode.profiles import ProfileError, load_profile, request_params
+from skrode.tools import Workspace, matches
+from skrode.worker import (
     ARGS_SCHEMA_PATH,
     DEFAULT_MAX_TURNS,
     ChatClient,
@@ -38,7 +38,7 @@ from router.worker import (
     run_worker,
     task_message,
 )
-from router.worktree import (
+from skrode.worktree import (
     WorktreeError,
     branch_name,
     changed_paths,
@@ -58,7 +58,7 @@ RECORD_SCHEMA: dict = json.loads(
     (_REPO / "schemas" / "job_record.json").read_text(encoding="utf-8")
 )
 ARGS_SCHEMA: dict = json.loads(ARGS_SCHEMA_PATH.read_text(encoding="utf-8"))
-STATE_DIR = Path.home() / ".local" / "state" / "hybrid-router"
+STATE_DIR = Path.home() / ".local" / "state" / "skrode"
 PROTECTED_LIST_LIMIT = 20  # the request schema's own limit for an explicit list
 DETAIL_LIMIT = 300
 SUMMARY_LIMIT = 1_000
@@ -432,7 +432,7 @@ def _run_job(
             else:
                 if progress is not None:
                     progress(f"attempt {attempts} of {max_attempts}: running the checks")
-                commit_all(worktree, base_commit, f"hybrid-router job {job_id} attempt {attempts}")
+                commit_all(worktree, base_commit, f"skrode job {job_id} attempt {attempts}")
                 checks = run_checks(
                     worktree,
                     criteria["commands"],
@@ -488,7 +488,7 @@ def _run_job(
                 },
             ]
         has_changes = commit_all(
-            worktree, base_commit, f"hybrid-router job {job_id} ({status})"
+            worktree, base_commit, f"skrode job {job_id} ({status})"
         )
         files_changed, diffstat = diff_stat(worktree, base_commit)
         removal_concern = _remove_keeping_verdict(

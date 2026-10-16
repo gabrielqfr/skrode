@@ -5,12 +5,12 @@ import os
 import subprocess
 from pathlib import Path
 
-from router.tools import HIDDEN_ENV_PREFIXES, matches
+from skrode.tools import HIDDEN_ENV_PREFIXES, matches
 
 BRANCH_PREFIX = "local-agent/"
 GIT_TIMEOUT_S = 60
-COMMIT_NAME = "hybrid-router"
-COMMIT_EMAIL = "hybrid-router@localhost"
+COMMIT_NAME = "skrode"
+COMMIT_EMAIL = "skrode@localhost"
 TEST_DIRS = ("tests", "test")
 TEST_NAMES = ("test_*", "*_test.*", "*.test.*", "*.spec.*")
 FILES_CHANGED_LIMIT = 30

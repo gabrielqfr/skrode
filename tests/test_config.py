@@ -1,14 +1,14 @@
-"""Tests for router.config: the user's per-repo setup commands."""
+"""Tests for skrode.config: the user's per-repo setup commands."""
 
 from pathlib import Path
 
 import pytest
 
-from router.config import CONFIG_PATH, ConfigError, load_config
+from skrode.config import CONFIG_PATH, ConfigError, load_config
 
 
 def test_the_default_path_is_under_the_users_config_dir():
-    expected = Path.home() / ".config" / "hybrid-router" / "config.toml"
+    expected = Path.home() / ".config" / "skrode" / "config.toml"
     assert expected == CONFIG_PATH
 
 

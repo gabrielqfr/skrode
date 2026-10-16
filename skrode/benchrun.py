@@ -15,8 +15,8 @@ import sys
 import time
 from pathlib import Path
 
-from router.benchprep import PrepError, _git
-from router.config import load_config
+from skrode.benchprep import PrepError, _git
+from skrode.config import load_config
 
 ROWS = (
     "opencode-bonsai",
@@ -34,10 +34,10 @@ RESULTS_HEADER = (
 )
 CLAUDE_TOOLS = ("Bash", "Read", "Edit", "Write", "Grep", "Glob")
 ROUTER_TOOLS = (
-    "mcp__hybrid-router__run_local_subagent",
-    "mcp__hybrid-router__wait_jobs",
-    "mcp__hybrid-router__job_status",
-    "mcp__hybrid-router__cancel_job",
+    "mcp__skrode__run_local_subagent",
+    "mcp__skrode__wait_jobs",
+    "mcp__skrode__job_status",
+    "mcp__skrode__cancel_job",
 )
 PLAIN_PROMPT = "Implement the spec in SPEC.md. Run the checks it lists and stop when they pass."
 SUBAGENT_PROMPT = (
@@ -47,7 +47,7 @@ SUBAGENT_PROMPT = (
     "yourself. Stop when the checks pass."
 )
 ROUTER_PROMPT = (
-    "Implement the spec in SPEC.md by delegating it to the local model with the hybrid-router "
+    "Implement the spec in SPEC.md by delegating it to the local model with the skrode "
     "tool run_local_subagent. Arguments: repo {repo}, base {base}, task the full text of "
     "SPEC.md, files the paths under its \"Files to touch\", and acceptance_criteria.commands "
     "the commands under \"Commands that must pass\". Wait for the job with wait_jobs. If it "
@@ -142,7 +142,7 @@ def row_command(
             "--directory",
             str(router_repo),
             "run",
-            "hybrid-router",
+            "skrode",
             "--config",
             str(prep / "config.toml"),
             "--state-dir",
@@ -159,7 +159,7 @@ def row_command(
             ]
         mcp_path = run_dir / "mcp.json"
         mcp = {
-            "mcpServers": {"hybrid-router": {"command": "uv", "args": server_args}}
+            "mcpServers": {"skrode": {"command": "uv", "args": server_args}}
         }
         mcp_path.write_text(json.dumps(mcp, indent=2) + "\n", encoding="utf-8")
         return (
@@ -344,7 +344,7 @@ def append_result(results: Path, result: dict[str, str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m router.benchrun")
+    parser = argparse.ArgumentParser(prog="python -m skrode.benchrun")
     parser.add_argument("--prep", type=Path, required=True)
     parser.add_argument("--row", choices=ROWS, required=True)
     parser.add_argument("--out", type=Path, required=True)

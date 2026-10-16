@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from router.tools import HIDDEN_ENV_PREFIXES, matches, sandbox_argv
+from skrode.tools import HIDDEN_ENV_PREFIXES, matches, sandbox_argv
 
 CHECK_TIMEOUT_S = 600
 TAIL_LINES = 200

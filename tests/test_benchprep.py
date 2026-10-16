@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from router.benchprep import DEFAULT_SETUP, PrepError, bench_base, main, source_for
-from router.config import load_config
+from skrode.benchprep import DEFAULT_SETUP, PrepError, bench_base, main, source_for
+from skrode.config import load_config
 
 SPEC = """# Fix a
 

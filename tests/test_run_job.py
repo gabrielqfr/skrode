@@ -1,4 +1,4 @@
-"""Tests for router.jobs.run_job: one job end to end, in a temp git repo, with a fake model."""
+"""Tests for skrode.jobs.run_job: one job end to end, in a temp git repo, with a fake model."""
 
 import json
 import subprocess
@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-import router.jobs as jobs
-from router.jobs import Attempt, run_job, verdict
-from router.llm import ChatReply, LLMError
-from router.tools import Workspace
-from router.worker import run_worker
-from router.worktree import WorktreeError
+import skrode.jobs as jobs
+from skrode.jobs import Attempt, run_job, verdict
+from skrode.llm import ChatReply, LLMError
+from skrode.tools import Workspace
+from skrode.worker import run_worker
+from skrode.worktree import WorktreeError
 
 TASK = "Change a.py so the value x becomes 2 instead of 1."
 CHECK = "grep -q 'x = 2' a.py"
@@ -422,7 +422,7 @@ def test_retry_sees_earlier_changes(repo):
     assert "a.py" in tool_messages[-1]["content"]
     assert " M a.py" in tool_messages[-1]["content"]
     subject = sh(repo, "log", "--format=%s", "-1", f"local-agent/{JOB}")
-    assert subject == f"hybrid-router job {JOB} (passed)"
+    assert subject == f"skrode job {JOB} (passed)"
     assert sh(repo, "rev-list", "--count", f"HEAD..local-agent/{JOB}") == "1"
 
 

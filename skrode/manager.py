@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
-from router.jobs import (
+from skrode.jobs import (
     STATE_DIR,
     _error_line,
     append_record,

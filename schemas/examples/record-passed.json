@@ -21,5 +21,5 @@
   "local_tokens": {"prompt": 48210, "completion": 6120, "reasoning": 3904},
   "wall_s": 412.5,
   "est_claude_tokens_avoided": 18000,
-  "logs": ".git/hybrid-router/jobs/j-20261014-a1b2c3"
+  "logs": ".git/skrode/jobs/j-20261014-a1b2c3"
 }

@@ -1,6 +1,6 @@
-# hybrid-router
+# skrode
 
-(Working name until the name search is done.) An MCP stdio server that lets Claude Code hand a
+An MCP stdio server that lets Claude Code hand a
 well-specified coding task to a local model. Its tool runs a small agent loop (five tools: read,
 write, edit, bash, grep) against llama-server on `127.0.0.1`, inside a git worktree on its own
 branch. It then runs the task's acceptance commands, retries with the failure output, and returns
@@ -12,7 +12,7 @@ without lowering quality, and to show that with a public benchmark.
 
 | Path | What it is |
 | --- | --- |
-| `router/` | The package. The job: `worker.py` (the agent loop over `llm.py` and the five `tools.py`, shaped by `profiles.py`), `worktree.py`, `acceptance.py`, `jobs.py` (`run_job`). Serving it: `server.py` (MCP tools), `manager.py` (jobs at once), `stats.py`, `config.py` (the user's per-repo setup), `cli.py`. The bench: `benchtask.py` (task folder to arguments), `benchprep.py` (a clone, base commit and config per task), `benchrun.py` (one row over the tasks, graded the same way), `benchsummary.py` (runs and rows: Claude usage, jobs, worker dollars, GPU energy) |
+| `skrode/` | The package. The job: `worker.py` (the agent loop over `llm.py` and the five `tools.py`, shaped by `profiles.py`), `worktree.py`, `acceptance.py`, `jobs.py` (`run_job`). Serving it: `server.py` (MCP tools), `manager.py` (jobs at once), `stats.py`, `config.py` (the user's per-repo setup), `cli.py`. The bench: `benchtask.py` (task folder to arguments), `benchprep.py` (a clone, base commit and config per task), `benchrun.py` (one row over the tasks, graded the same way), `benchsummary.py` (runs and rows: Claude usage, jobs, worker dollars, GPU energy) |
 | `tests/` | pytest. Tests never need a model server or the network: fake the HTTP endpoint |
 | `scripts/verify.sh` | The checks every change must pass, with bounded output |
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
@@ -26,7 +26,7 @@ without lowering quality, and to show that with a public benchmark.
 ## Non-negotiables
 
 1. **Local by default.** The worker talks to `127.0.0.1` unless the user configures another
-   endpoint; until a spec opens that, the check in `router/llm.py` stays. Tests never use the
+   endpoint; until a spec opens that, the check in `skrode/llm.py` stays. Tests never use the
    network.
 2. **No silent failover.** A job runs on the worker that the caller or the user's configuration
    names. When it cannot finish, it ends as `failed` or `escalate` with a short record; it moves

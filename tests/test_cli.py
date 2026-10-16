@@ -10,10 +10,10 @@ import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-import router.cli as cli
-from router.jobs import run_job
-from router.llm import LLMClient
-from router.profiles import load_profile, request_params
+import skrode.cli as cli
+from skrode.jobs import run_job
+from skrode.llm import LLMClient
+from skrode.profiles import load_profile, request_params
 
 REPO = Path(__file__).resolve().parents[1]
 TOOLS = [
@@ -265,7 +265,7 @@ def test_a_state_dir_that_is_not_writable_exits_2(fakes, monkeypatch, tmp_path, 
 
 def test_the_cli_module_does_not_import_mcp():
     # flags and profile errors are reported without paying for the SDK's import
-    code = "import sys, router.cli; print('mcp' in sys.modules)"
+    code = "import sys, skrode.cli; print('mcp' in sys.modules)"
     out = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=REPO
     ).stdout
@@ -278,7 +278,7 @@ def test_the_command_lists_the_tools_over_stdio(tmp_path, mode):
     config.write_text("")
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "router.cli", "--state-dir", str(tmp_path), "--config", str(config)],
+        args=["-m", "skrode.cli", "--state-dir", str(tmp_path), "--config", str(config)],
         cwd=str(REPO),
     )
 
@@ -293,7 +293,7 @@ def test_closing_stdin_ends_the_command_cleanly(tmp_path):
     config = tmp_path / "config.toml"
     config.write_text("")
     done = subprocess.run(
-        [sys.executable, "-m", "router.cli", "--state-dir", str(tmp_path), "--config", str(config)],
+        [sys.executable, "-m", "skrode.cli", "--state-dir", str(tmp_path), "--config", str(config)],
         input="",
         capture_output=True,
         text=True,
@@ -304,6 +304,6 @@ def test_closing_stdin_ends_the_command_cleanly(tmp_path):
     assert done.stdout == ""
 
 
-def test_the_hybrid_router_command_runs_main():
+def test_the_skrode_command_runs_main():
     pyproject = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
-    assert pyproject["project"]["scripts"] == {"hybrid-router": "router.cli:main"}
+    assert pyproject["project"]["scripts"] == {"skrode": "skrode.cli:main"}

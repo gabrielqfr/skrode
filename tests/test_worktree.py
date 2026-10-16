@@ -1,4 +1,4 @@
-"""Tests for router.worktree: the git helpers one job uses."""
+"""Tests for skrode.worktree: the git helpers one job uses."""
 
 import os
 import subprocess
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import router.worktree as worktree
-from router.worktree import (
+import skrode.worktree as worktree
+from skrode.worktree import (
     WorktreeError,
     _failure,
     changed_paths,
@@ -157,7 +157,7 @@ def test_commit_all(tmp_path, repo: tuple[Path, str]) -> None:
     (wt / "new.py").write_text("n\n")
     assert commit_all(wt, base, "added new.py") is True
     assert sh(wt, "log", "-1", "--format=%an <%ae>%n%s") == (
-        "hybrid-router <hybrid-router@localhost>\nadded new.py"
+        "skrode <skrode@localhost>\nadded new.py"
     )
     assert sh(wt, "status", "--porcelain") == ""
     assert commit_all(wt, base, "again") is True

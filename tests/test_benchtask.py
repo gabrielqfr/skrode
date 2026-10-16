@@ -1,4 +1,4 @@
-"""Tests for router.benchtask: eval task folders to run_local_subagent args."""
+"""Tests for skrode.benchtask: eval task folders to run_local_subagent args."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from router.benchtask import TESTS_NOTE, TaskError, hidden_paths, main, task_args
+from skrode.benchtask import TESTS_NOTE, TaskError, hidden_paths, main, task_args
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = json.loads((ROOT / "schemas" / "run_local_subagent.json").read_text(encoding="utf-8"))

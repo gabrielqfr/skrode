@@ -1,4 +1,4 @@
-# hybrid-router: implementer rules (Build agent)
+# skrode: implementer rules (Build agent)
 
 You implement one spec, from SPEC.md in the worktree root. The repository's own AGENTS.md is also
 loaded: it describes the project, and its non-negotiables bind every line you write.

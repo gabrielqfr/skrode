@@ -9,9 +9,9 @@ import anyio
 import pytest
 from mcp.client import Client
 
-from router.manager import JobManager
-from router.server import build_server
-from router.stats import summarize
+from skrode.manager import JobManager
+from skrode.server import build_server
+from skrode.stats import summarize
 
 ARGS_SCHEMA = json.loads(
     (Path(__file__).resolve().parents[1] / "schemas" / "run_local_subagent.json").read_text(
@@ -429,7 +429,7 @@ def test_a_closed_manager_is_an_internal_error(tmp_path):
 
 def test_the_router_modules_do_not_import_mcp():
     # the jobs command line and the manager start without paying for the SDK's import
-    code = "import sys, router.jobs, router.manager; print('mcp' in sys.modules)"
+    code = "import sys, skrode.jobs, skrode.manager; print('mcp' in sys.modules)"
     out = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     ).stdout

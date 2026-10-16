@@ -14,8 +14,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from router.benchtask import TaskError, hidden_paths, task_args
-from router.tools import HIDDEN_ENV_PREFIXES
+from skrode.benchtask import TaskError, hidden_paths, task_args
+from skrode.tools import HIDDEN_ENV_PREFIXES
 
 BRANCH_PREFIX = "bench/"
 BASE_MESSAGE = "bench base"
@@ -146,7 +146,7 @@ def prepare(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m router.benchprep")
+    parser = argparse.ArgumentParser(prog="python -m skrode.benchprep")
     parser.add_argument("--tasks", type=Path, required=True)
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--default-source", type=Path, required=True)

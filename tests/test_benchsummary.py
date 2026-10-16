@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from router.benchrun import RESULTS_HEADER
-from router.benchsummary import (
+from skrode.benchrun import RESULTS_HEADER
+from skrode.benchsummary import (
     BRL_PER_USD,
     ROW_HEADER,
     RUN_HEADER,

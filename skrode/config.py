@@ -7,7 +7,7 @@ never a tool argument or a file inside the repo.
 import tomllib
 from pathlib import Path
 
-CONFIG_PATH = Path.home() / ".config" / "hybrid-router" / "config.toml"
+CONFIG_PATH = Path.home() / ".config" / "skrode" / "config.toml"
 
 
 class ConfigError(ValueError):

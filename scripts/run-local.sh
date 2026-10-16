@@ -5,7 +5,7 @@
 # Needs a model server already on 127.0.0.1:8080; never starts one. Env: TIMEOUT_MIN (45),
 # BASE (the commit to branch from, default HEAD).
 # Round N of <phase> leaves:
-#   worktree ../hybrid-router-wt/<phase>-rN on branch local/<phase>-rN (kept for review)
+#   worktree ../skrode-wt/<phase>-rN on branch local/<phase>-rN (kept for review)
 #   .claude/rounds/<phase>/rN/{spec.md,opencode.log,agent.diff,touched.txt,named.txt,verify.log}
 #   one row in .claude/rounds.tsv (revision rounds are counted, never hidden)
 set -u
@@ -24,7 +24,7 @@ curl -sf -m 5 http://127.0.0.1:8080/health >/dev/null \
 n=1; while [ -e "$repo/.claude/rounds/$phase/r$n" ]; do n=$((n + 1)); done
 out="$repo/.claude/rounds/$phase/r$n"
 branch="local/$phase-r$n"
-wt="$(dirname "$repo")/hybrid-router-wt/$phase-r$n"
+wt="$(dirname "$repo")/skrode-wt/$phase-r$n"
 mkdir -p "$out" "$(dirname "$wt")"
 cp "$spec" "$out/spec.md"
 

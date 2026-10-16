@@ -1,4 +1,4 @@
-"""Tests for router.tools: the five worker tools and their guards."""
+"""Tests for skrode.tools: the five worker tools and their guards."""
 
 import json
 import os
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from router.tools import (
+from skrode.tools import (
     GREP_TIMEOUT_S,
     MASKED_HOME_PATHS,
     SANDBOX_UV_CACHE,
@@ -461,7 +461,7 @@ def test_grep_timeout(monkeypatch, tmp_path):
         calls.append(kwargs)
         raise subprocess.TimeoutExpired(args[0], kwargs.get("timeout"))
 
-    monkeypatch.setattr("router.tools.subprocess.run", fake_run)
+    monkeypatch.setattr("skrode.tools.subprocess.run", fake_run)
     ws = Workspace(root=tmp_path, files=[])
     r = ws.run("grep", {"pattern": "foo", "glob": "**/*.py"})
     assert r.outcome == Outcome.ERROR

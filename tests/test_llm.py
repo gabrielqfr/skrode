@@ -1,4 +1,4 @@
-"""Tests for router.llm: the chat-completion client for the local model server."""
+"""Tests for skrode.llm: the chat-completion client for the local model server."""
 
 import contextlib
 import http.client
@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from router.llm import LLMClient, LLMError
+from skrode.llm import LLMClient, LLMError
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
-"""Tests for router.profiles: loading profiles and building request parameters."""
+"""Tests for skrode.profiles: loading profiles and building request parameters."""
 
 import pytest
 
-from router.profiles import ProfileError, load_profile, request_params
+from skrode.profiles import ProfileError, load_profile, request_params
 
 
 def test_bonsai_profile_loads():

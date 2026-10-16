@@ -1,6 +1,6 @@
 """One summary of every bench run, and one line per row.
 
-`router.benchrun` leaves one batch directory per bench batch: `results.tsv`
+`skrode.benchrun` leaves one batch directory per bench batch: `results.tsv`
 (one line per run, the grade from `check.sh`), and per run a directory holding
 `row.out` (the row's stdout) and, for router rows, `state/jobs.jsonl`.
 GPU batches add `power.jsonl` (GPU watts) and `idle.tsv` (loaded-idle
@@ -26,7 +26,7 @@ import statistics
 import sys
 from pathlib import Path
 
-from router import jobs
+from skrode import jobs
 
 TARIFF_BRL_KWH = 0.89181  # the user's electricity tariff, R$ per kWh
 BRL_PER_USD = 5.11
@@ -389,7 +389,7 @@ def _write_tsv(path: Path, header: tuple[str, ...], records: list[dict[str, str]
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m router.benchsummary")
+    parser = argparse.ArgumentParser(prog="python -m skrode.benchsummary")
     parser.add_argument("batches", nargs="+", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--tariff", type=float, default=TARIFF_BRL_KWH)

@@ -1,4 +1,4 @@
-"""The hybrid-router command: serve the job tools to one MCP client over stdio."""
+"""The skrode command: serve the job tools to one MCP client over stdio."""
 
 import argparse
 import functools
@@ -7,11 +7,11 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from router.config import CONFIG_PATH, ConfigError, load_config
-from router.jobs import STATE_DIR, run_job
-from router.llm import DEFAULT_BASE_URL, LLMClient
-from router.manager import JobManager
-from router.profiles import ProfileError, load_profile, request_params
+from skrode.config import CONFIG_PATH, ConfigError, load_config
+from skrode.jobs import STATE_DIR, run_job
+from skrode.llm import DEFAULT_BASE_URL, LLMClient
+from skrode.manager import JobManager
+from skrode.profiles import ProfileError, load_profile, request_params
 
 DEFAULT_PROFILE = "bonsai2-27b"
 DEFAULT_MODEL = "local"  # the alias llama-server serves the profile's model under
@@ -37,7 +37,7 @@ def serve(manager: JobManager, list_endpoints: Callable[[], list[dict]]) -> None
     import anyio
     import mcp.server.stdio
 
-    from router.server import build_server
+    from skrode.server import build_server
 
     server = build_server(manager, list_endpoints=list_endpoints)
 
@@ -50,7 +50,7 @@ def serve(manager: JobManager, list_endpoints: Callable[[], list[dict]]) -> None
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="hybrid-router",
+        prog="skrode",
         description="Serve run_local_subagent and the job tools to one MCP client over stdio.",
     )
     parser.add_argument("--profile", default=DEFAULT_PROFILE)

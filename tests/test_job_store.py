@@ -1,4 +1,4 @@
-"""Tests for the job store (jobs.jsonl) and the python -m router.jobs command."""
+"""Tests for the job store (jobs.jsonl) and the python -m skrode.jobs command."""
 
 import json
 import subprocess
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-import router.jobs as jobs
-from router.jobs import append_record, load_records, main, run_job
-from router.llm import ChatReply
-from router.profiles import load_profile, request_params
+import skrode.jobs as jobs
+from skrode.jobs import append_record, load_records, main, run_job
+from skrode.llm import ChatReply
+from skrode.profiles import load_profile, request_params
 
 CHECK = "grep -q 'x = 2' a.py"
 REPORT = {"outcome": "done", "summary": "set x to 2", "concerns": []}

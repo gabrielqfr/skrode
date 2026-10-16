@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from router.benchrun import (
+from skrode.benchrun import (
     FLASH_URL,
     RESULTS_HEADER,
     SONNET,
@@ -133,7 +133,7 @@ def test_subagent_row_defines_a_haiku_implementer(bench):
 def test_router_row_writes_an_mcp_config(bench):
     argv, _ = command(bench, "router-bonsai")
     path = Path(after(argv, "--mcp-config"))
-    server = json.loads(path.read_text(encoding="utf-8"))["mcpServers"]["hybrid-router"]
+    server = json.loads(path.read_text(encoding="utf-8"))["mcpServers"]["skrode"]
     assert server["command"] == "uv"
     assert after(server["args"], "--directory") == str(bench["router"])
     assert after(server["args"], "--config") == str(bench["prep"] / "config.toml")
@@ -141,14 +141,14 @@ def test_router_row_writes_an_mcp_config(bench):
     assert "--base-url" not in server["args"]
     assert str(bench["repo"]) in argv[2] and bench["base"] in argv[2]
     tools = argv[argv.index("--allowedTools") + 1:]
-    assert "mcp__hybrid-router__run_local_subagent" in tools
-    assert "mcp__hybrid-router__wait_jobs" in tools
+    assert "mcp__skrode__run_local_subagent" in tools
+    assert "mcp__skrode__wait_jobs" in tools
 
 
 def test_flash_row_tags_its_base_url_with_task_and_run(bench):
     argv, _ = command(bench, "router-flash", "r2")
     config = Path(after(argv, "--mcp-config")).read_text(encoding="utf-8")
-    server = json.loads(config)["mcpServers"]["hybrid-router"]
+    server = json.loads(config)["mcpServers"]["skrode"]
     assert after(server["args"], "--model") == "deepseek-flash"
     assert after(server["args"], "--base-url") == f"{FLASH_URL}/t1.r2"
 
@@ -247,7 +247,7 @@ def test_main_makes_relative_paths_absolute(bench, monkeypatch):
     monkeypatch.chdir(bench["out"].parent)
     assert main(["--prep", "prep", "--row", "router-bonsai", "--out", "out",
                  "--worktrees", "wt", "--runs", "1"]) == 0
-    server = json.loads(bench["seen"].read_text())["mcpServers"]["hybrid-router"]
+    server = json.loads(bench["seen"].read_text())["mcpServers"]["skrode"]
     assert after(server["args"], "--config") == str(bench["prep"] / "config.toml")
     assert after(server["args"], "--state-dir") == str(bench["out"] / "router-bonsai" / "t1" / "r1"
                                                        / "state")

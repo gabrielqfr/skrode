@@ -252,7 +252,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hybrid-router"
+name = "skrode"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [

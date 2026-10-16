@@ -1,4 +1,4 @@
-from router.stats import STATUSES, summarize
+from skrode.stats import STATUSES, summarize
 
 
 def record(job_id, status, wall_s, prompt, completion, reason=None):

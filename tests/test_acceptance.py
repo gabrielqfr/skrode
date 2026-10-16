@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from router.acceptance import (
+from skrode.acceptance import (
     RETRY_TAIL_CHARS,
     CheckResult,
     first_failure,

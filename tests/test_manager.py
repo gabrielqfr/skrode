@@ -1,4 +1,4 @@
-"""Tests for router.manager.JobManager: the queue, with a fake run_job and no model."""
+"""Tests for skrode.manager.JobManager: the queue, with a fake run_job and no model."""
 
 import json
 import queue
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from router.jobs import append_record, load_records
-from router.manager import JobManager
+from skrode.jobs import append_record, load_records
+from skrode.manager import JobManager
 
 EXAMPLE = Path(__file__).resolve().parents[1] / "schemas" / "examples" / "record-passed.json"
 
@@ -225,7 +225,7 @@ def test_close_cancels_queued_and_running_jobs(fake, clock, tmp_path):
 
 
 def test_wait_never_blocks_past_its_limit(manager, fake, monkeypatch):
-    monkeypatch.setattr("router.manager.WAIT_LIMIT_S", 0.2)
+    monkeypatch.setattr("skrode.manager.WAIT_LIMIT_S", 0.2)
     job = manager.submit({"task": "a"})
     assert fake.started.get(timeout=5) == job
     start = time.monotonic()
@@ -253,7 +253,7 @@ def test_submit_racing_close_is_refused(manager, monkeypatch):
         manager.close()
         return "j-20261015-abcdef"
 
-    monkeypatch.setattr("router.manager.new_job_id", close_then_id)
+    monkeypatch.setattr("skrode.manager.new_job_id", close_then_id)
     with pytest.raises(RuntimeError, match="the job manager is closed"):
         manager.submit({"task": "a"})
     assert manager.status("j-20261015-abcdef") == {
