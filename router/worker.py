@@ -40,11 +40,11 @@ STOPS = (
     "must_not_touch",
     "schema_errors",
     "rewrite_loop",
-        "turn_limit",
-        "endpoint",
-        "cancelled",
-        "timeout",
-    )
+    "turn_limit",
+    "endpoint",
+    "cancelled",
+    "timeout",
+)
 _JSON_CALL = re.compile(r'\{\s*"name"\s*:\s*"(?:read|write|edit|bash|grep)"')
 ARGS_SCHEMA_PATH = _REPO / "schemas" / "run_local_subagent.json"
 LOG_TEXT_LIMIT = 2_000

@@ -526,3 +526,35 @@ def test_progress_lines(repo: Path) -> None:
         "attempt 2 of 3: turn 2 of 40",
         "attempt 2 of 3: running the checks",
     ]
+
+
+def test_cancel_during_the_last_turn_skips_the_checks(repo: Path) -> None:
+    answers = iter([None, None, "cancelled"])
+    lines: list[str] = []
+    client = ScriptClient([W, done()])
+    record = _run(
+        repo, client, should_stop=lambda: next(answers, None), progress=lines.append
+    )
+    assert record["status"] == "failed"
+    assert record["reason"] == "cancelled"
+    assert record["detail"] == "cancelled in attempt 1, after 2 of 40 turns"
+    assert record["attempts"] == 1
+    assert record["checks"] == []
+    assert record["branch"] == f"local-agent/{JOB}"
+    assert sh(repo, "show", f"local-agent/{JOB}:a.py") == "x = 2"
+    assert lines == ["attempt 1 of 3: turn 1 of 40", "attempt 1 of 3: turn 2 of 40"]
+    assert not (repo.parent / "state" / "jobs" / JOB / "check-1-1.log").exists()
+
+
+def test_should_stop_is_not_polled_again_after_the_worker_stops(repo: Path) -> None:
+    polls: list[str] = []
+
+    def should_stop() -> str | None:
+        polls.append("poll")
+        return "timeout" if len(polls) == 2 else None
+
+    client = ScriptClient([W, done()])
+    record = _run(repo, client, should_stop=should_stop)
+    assert record["reason"] == "timeout"
+    assert record["detail"] == "timed out in attempt 1, after 1 of 40 turns"
+    assert polls == ["poll", "poll"]

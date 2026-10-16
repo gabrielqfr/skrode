@@ -10,7 +10,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -65,6 +65,7 @@ SUMMARY_LIMIT = 1_000
 CONCERN_LIMIT = 200
 CONCERNS_MAX = 3
 STORE_NAME = "jobs.jsonl"
+STOPPED = ("must_not_touch", "endpoint", "cancelled", "timeout")  # stops that skip the checks
 _STORE_LOCK = threading.Lock()  # jobs may finish on several threads at once
 
 
@@ -378,9 +379,11 @@ def _run_job(
         )
         max_attempts = 1 + args.get("max_retries", 2)
         max_turns = args.get("max_turns", DEFAULT_MAX_TURNS)
+
         def on_turn(turn: int) -> None:
             if progress is not None:
                 progress(f"attempt {attempts} of {max_attempts}: turn {turn} of {max_turns}")
+
         bad_calls = 0
         history = [
             {"role": "system", "content": prompts["system"]},
@@ -410,9 +413,16 @@ def _run_job(
             tokens["prompt"] += result.tokens["prompt"]
             tokens["completion"] += result.tokens["completion"]
             bad_calls = result.bad_calls
+            if should_stop is not None and result.stop not in STOPPED:
+                # a stop asked for during the last model call skips the checks too
+                late = should_stop()
+                if late is not None:
+                    result = replace(
+                        result, stop=late, detail=f"after {result.turns} of {max_turns} turns"
+                    )
             changed = changed_paths(worktree, base_commit)
             scope = scope_violation(changed, files, must_not_touch)
-            if result.stop in ("must_not_touch", "endpoint", "cancelled", "timeout") or (
+            if result.stop in STOPPED or (
                 scope is not None and scope[0] == "must_not_touch"
             ):
                 checks = []
