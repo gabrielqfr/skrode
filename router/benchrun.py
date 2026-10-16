@@ -279,7 +279,7 @@ def run_once(
         code = run_command(
             argv,
             wt,
-            env,
+            {**env, "PWD": str(wt)},
             run_dir / "row.out",
             run_dir / "row.err",
             timeout_min * 60,
@@ -355,6 +355,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep", action="store_true")
     parser.add_argument("ids", nargs="*")
     options = parser.parse_args(argv)
+    options.prep = options.prep.resolve()
+    options.out = options.out.resolve()
+    options.worktrees = options.worktrees.resolve()
     tasks = read_manifest(options.prep)
     if options.ids:
         tasks = [task for task in tasks if task["id"] in options.ids]

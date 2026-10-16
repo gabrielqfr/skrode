@@ -226,3 +226,28 @@ def test_main_writes_results_and_skips_runs_already_there(bench):
     assert bench["calls"].read_text().count("run") == 2
     assert main([*common, "--runs", "3", "t1"]) == 0
     assert bench["calls"].read_text().count("run") == 3
+
+
+def test_the_row_sees_its_worktree_as_pwd(bench):
+    # opencode takes its project from $PWD, not the process cwd; bash would reset PWD itself
+    path = bench["bin"] / "opencode"
+    path.write_text(
+        "#!/usr/bin/env python3\nimport os\n"
+        f"open({str(bench['seen'])!r}, 'w').write(os.environ.get('PWD', ''))\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+    run(bench)
+    assert bench["seen"].read_text() == str(bench["wt"] / "opencode-bonsai-t1-r1")
+
+
+def test_main_makes_relative_paths_absolute(bench, monkeypatch):
+    copy = f'[ "$1" = --mcp-config ] && cp "$2" {bench["seen"]}'
+    fake(bench, "claude", f"while [ $# -gt 0 ]; do {copy}; shift; done\n")
+    monkeypatch.chdir(bench["out"].parent)
+    assert main(["--prep", "prep", "--row", "router-bonsai", "--out", "out",
+                 "--worktrees", "wt", "--runs", "1"]) == 0
+    server = json.loads(bench["seen"].read_text())["mcpServers"]["hybrid-router"]
+    assert after(server["args"], "--config") == str(bench["prep"] / "config.toml")
+    assert after(server["args"], "--state-dir") == str(bench["out"] / "router-bonsai" / "t1" / "r1"
+                                                       / "state")
