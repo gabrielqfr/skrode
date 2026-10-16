@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8080"
 CHAT_PATH = "/v1/chat/completions"
+HEALTH_PATH = "/health"
 
 
 class LLMError(RuntimeError):
@@ -54,6 +55,17 @@ class LLMClient:
         self.sleep = sleep
         # no proxy whatever the environment says: the worker talks to 127.0.0.1 only
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+
+    def health(self, timeout_s: float = 2.0) -> str:
+        """Return ok, loading (llama-server answers 503 while it loads its model) or down."""
+        request = urllib.request.Request(self.base_url + HEALTH_PATH)
+        try:
+            with self.opener.open(request, timeout=timeout_s):
+                return "ok"
+        except urllib.error.HTTPError as exc:
+            return "loading" if exc.code == 503 else "down"
+        except (OSError, http.client.HTTPException):
+            return "down"
 
     def chat(self, body: dict) -> ChatReply:
         data = json.dumps(body).encode()

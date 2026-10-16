@@ -45,9 +45,11 @@ class FakeRun:
         return {"job_id": job_id, "status": "passed", "summary": "Añadido: 1 test"}
 
 
-def serve(fake, tmp_path, scenario, *, mode="legacy", interval=0.05):
+def serve(fake, tmp_path, scenario, *, mode="legacy", interval=0.05, list_endpoints=list):
     manager = JobManager(fake, profile_name="test-profile", state_dir=tmp_path)
-    server = build_server(manager, progress_interval_s=interval)
+    server = build_server(
+        manager, list_endpoints=list_endpoints, progress_interval_s=interval
+    )
 
     async def main():
         async with Client(server, mode=mode) as client:
@@ -80,6 +82,7 @@ def test_lists_the_job_tools(tmp_path, mode):
         "wait_jobs",
         "cancel_job",
         "stats",
+        "list_endpoints",
     ]
     assert tools[0].input_schema == ARGS_SCHEMA
     assert tools[0].description == ARGS_SCHEMA["description"]
@@ -339,6 +342,64 @@ def test_stats_rejects_a_last_below_one(tmp_path):
     result = serve(FakeRun(), tmp_path, scenario)
     assert result.is_error is True
     assert payload(result)["error"].startswith("bad arguments: ")
+
+
+ENDPOINTS = [
+    {
+        "name": "local",
+        "base_url": "http://127.0.0.1:8080",
+        "model": "local",
+        "profile": "test-profile",
+        "health": "loading",
+    }
+]
+
+
+def test_list_endpoints_returns_the_callables_list_off_the_event_loop(tmp_path):
+    threads = []
+
+    def list_endpoints():
+        threads.append(threading.current_thread() is threading.main_thread())
+        return ENDPOINTS
+
+    async def scenario(client):
+        return await client.call_tool("list_endpoints", {})
+
+    result = serve(FakeRun(), tmp_path, scenario, list_endpoints=list_endpoints)
+    assert result.is_error is False
+    assert payload(result) == ENDPOINTS
+    # a health check can take two seconds; the event loop runs in the main thread
+    assert threads == [False]
+
+
+def test_list_endpoints_is_empty_by_default(tmp_path):
+    async def scenario(client):
+        return await client.call_tool("list_endpoints", {})
+
+    result = serve(FakeRun(), tmp_path, scenario)
+    assert result.is_error is False
+    assert result.content[0].text == "[]"
+
+
+def test_list_endpoints_takes_no_arguments(tmp_path):
+    async def scenario(client):
+        return await client.call_tool("list_endpoints", {"name": "local"})
+
+    result = serve(FakeRun(), tmp_path, scenario, list_endpoints=lambda: ENDPOINTS)
+    assert result.is_error is True
+    assert payload(result)["error"].startswith("bad arguments: ")
+
+
+def test_a_failing_list_endpoints_is_an_internal_error(tmp_path):
+    def list_endpoints():
+        raise RuntimeError("no endpoints")
+
+    async def scenario(client):
+        return await client.call_tool("list_endpoints", {})
+
+    result = serve(FakeRun(), tmp_path, scenario, list_endpoints=list_endpoints)
+    assert result.is_error is True
+    assert payload(result) == {"error": "internal: RuntimeError: no endpoints"}
 
 
 def test_an_unseen_job_id_is_unknown(tmp_path):

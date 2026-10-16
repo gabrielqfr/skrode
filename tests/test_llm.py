@@ -5,6 +5,7 @@ import json
 import socket
 import threading
 import time
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -313,3 +314,61 @@ def test_error_text_cut_by_characters(fake_server):
         LLMClient(base_url=base_url, timeout_s=5).chat({"a": 1})
     assert str(excinfo.value) == "HTTP 400: " + "é" * 200
     assert len(received) == 1
+
+
+class _RaisingOpener:
+    """Stands in for LLMClient.opener: records each request, then raises."""
+
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+        self.calls: list[tuple[str, str, float]] = []
+
+    def open(self, request, timeout):
+        self.calls.append((request.full_url, request.get_method(), timeout))
+        raise self.error
+
+
+def test_health_is_ok_when_the_server_answers(fake_server):
+    with fake_server([]) as (base_url, received):
+        assert LLMClient(base_url=base_url).health() == "ok"
+    assert received == [{"path": "/health", "content_type": None, "body": None}]
+
+
+def test_health_is_down_when_nothing_listens():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    assert LLMClient(base_url=f"http://127.0.0.1:{port}").health() == "down"
+
+
+def test_health_is_loading_on_503():
+    client = LLMClient(base_url="http://127.0.0.1:9999")
+    error = urllib.error.HTTPError(
+        "http://127.0.0.1:9999/health", 503, "Service Unavailable", {}, None
+    )
+    client.opener = _RaisingOpener(error)
+    assert client.health() == "loading"
+    assert client.opener.calls == [("http://127.0.0.1:9999/health", "GET", 2.0)]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        urllib.error.HTTPError("http://127.0.0.1:9999/health", 500, "Error", {}, None),
+        urllib.error.HTTPError("http://127.0.0.1:9999/health", 302, "Found", {}, None),
+        urllib.error.URLError(ConnectionRefusedError(111, "Connection refused")),
+        TimeoutError("timed out"),
+        ConnectionResetError(104, "Connection reset by peer"),
+    ],
+)
+def test_health_is_down_on_any_other_failure(error):
+    client = LLMClient(base_url="http://127.0.0.1:9999")
+    client.opener = _RaisingOpener(error)
+    assert client.health() == "down"
+
+
+def test_health_uses_its_own_timeout():
+    client = LLMClient(base_url="http://127.0.0.1:9999/", timeout_s=600.0)
+    client.opener = _RaisingOpener(TimeoutError("timed out"))
+    assert client.health(timeout_s=0.5) == "down"
+    assert client.opener.calls == [("http://127.0.0.1:9999/health", "GET", 0.5)]

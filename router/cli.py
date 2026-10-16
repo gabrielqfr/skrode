@@ -4,6 +4,7 @@ import argparse
 import functools
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from router.jobs import STATE_DIR, run_job
@@ -15,7 +16,20 @@ DEFAULT_PROFILE = "bonsai2-27b"
 DEFAULT_MODEL = "local"  # the alias llama-server serves the profile's model under
 
 
-def serve(manager: JobManager) -> None:
+def endpoints(client: LLMClient, *, model: str, profile: str) -> list[dict]:
+    """The one endpoint this command serves jobs on, for the list_endpoints tool."""
+    return [
+        {
+            "name": "local",
+            "base_url": client.base_url,
+            "model": model,
+            "profile": profile,
+            "health": client.health(),
+        }
+    ]
+
+
+def serve(manager: JobManager, list_endpoints: Callable[[], list[dict]]) -> None:
     """Serve the job tools over stdin and stdout until the client closes stdin."""
     # imported here, so a bad flag or profile is reported before the SDK's import cost
     import anyio
@@ -23,7 +37,7 @@ def serve(manager: JobManager) -> None:
 
     from router.server import build_server
 
-    server = build_server(manager)
+    server = build_server(manager, list_endpoints=list_endpoints)
 
     async def run() -> None:
         async with mcp.server.stdio.stdio_server() as (read, write):
@@ -80,7 +94,10 @@ def main(argv: list[str] | None = None) -> int:
 
     manager = JobManager(run, profile_name=ns.profile, state_dir=state_dir)
     try:
-        serve(manager)
+        serve(
+            manager,
+            functools.partial(endpoints, client, model=ns.model, profile=ns.profile),
+        )
     finally:
         manager.close()
     return 0

@@ -1,4 +1,5 @@
 import functools
+import socket
 import subprocess
 import sys
 import tomllib
@@ -15,13 +16,20 @@ from router.llm import LLMClient
 from router.profiles import load_profile, request_params
 
 REPO = Path(__file__).resolve().parents[1]
-TOOLS = ["run_local_subagent", "job_status", "wait_jobs", "cancel_job", "stats"]
+TOOLS = [
+    "run_local_subagent",
+    "job_status",
+    "wait_jobs",
+    "cancel_job",
+    "stats",
+    "list_endpoints",
+]
 
 
 @pytest.fixture
 def fakes(monkeypatch):
     """Replaces JobManager and serve, recording what main builds; no job ever runs."""
-    made = {"managers": [], "served": []}
+    made = {"managers": [], "served": [], "endpoints": []}
 
     class FakeManager:
         def __init__(self, run, *, profile_name, state_dir):
@@ -34,8 +42,9 @@ def fakes(monkeypatch):
         def close(self, timeout_s=5.0):
             self.closed = True
 
-    def fake_serve(manager):
+    def fake_serve(manager, list_endpoints):
         made["served"].append((manager, manager.closed))
+        made["endpoints"].append(list_endpoints)
 
     monkeypatch.setattr(cli, "JobManager", FakeManager)
     monkeypatch.setattr(cli, "serve", fake_serve)
@@ -86,8 +95,60 @@ def test_main_defaults_to_the_sandbox_and_the_user_state_dir(fakes, monkeypatch,
     assert manager.run.keywords["client"].base_url == "http://127.0.0.1:8080"
 
 
+def test_main_serves_the_endpoint_list_bound_to_its_client(fakes, tmp_path):
+    argv = [
+        "--state-dir", str(tmp_path),
+        "--model", "served-alias",
+        "--base-url", "http://127.0.0.1:9999",
+    ]
+    assert cli.main(argv) == 0
+    [manager] = fakes["managers"]
+    [list_endpoints] = fakes["endpoints"]
+    assert isinstance(list_endpoints, functools.partial)
+    assert list_endpoints.func is cli.endpoints
+    assert list_endpoints.args == (manager.run.keywords["client"],)
+    assert list_endpoints.keywords == {"model": "served-alias", "profile": "bonsai2-27b"}
+
+
+class FakeClient:
+    base_url = "http://127.0.0.1:9999"
+
+    def __init__(self, health):
+        self.answer = health
+        self.calls = 0
+
+    def health(self):
+        self.calls += 1
+        return self.answer
+
+
+def test_endpoints_names_the_one_local_endpoint_and_checks_it_each_call():
+    client = FakeClient("loading")
+    assert cli.endpoints(client, model="served-alias", profile="some-profile") == [
+        {
+            "name": "local",
+            "base_url": "http://127.0.0.1:9999",
+            "model": "served-alias",
+            "profile": "some-profile",
+            "health": "loading",
+        }
+    ]
+    cli.endpoints(client, model="served-alias", profile="some-profile")
+    assert client.calls == 2
+
+
+def test_endpoints_reports_a_server_that_is_not_running():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    client = LLMClient(f"http://127.0.0.1:{port}")
+    [endpoint] = cli.endpoints(client, model="local", profile="bonsai2-27b")
+    assert endpoint["health"] == "down"
+    assert endpoint["base_url"] == f"http://127.0.0.1:{port}"
+
+
 def test_the_manager_closes_when_serving_fails(fakes, monkeypatch, tmp_path):
-    def broken_serve(manager):
+    def broken_serve(manager, list_endpoints):
         raise RuntimeError("stdio broke")
 
     monkeypatch.setattr(cli, "serve", broken_serve)

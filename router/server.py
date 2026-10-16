@@ -1,7 +1,8 @@
-"""The MCP stdio server's tools: run_local_subagent, job_status, wait_jobs, cancel_job, stats."""
+"""The MCP stdio server's tools: the job tools, stats and list_endpoints."""
 
 import json
 import time
+from collections.abc import Callable
 
 import anyio
 import mcp_types as types
@@ -40,6 +41,7 @@ SCHEMAS: dict[str, dict] = {
         "additionalProperties": False,
         "properties": {"last": {"type": "integer", "minimum": 1, "maximum": 10000}},
     },
+    "list_endpoints": {"type": "object", "additionalProperties": False, "properties": {}},
 }
 DESCRIPTIONS: dict[str, str] = {
     "run_local_subagent": ARGS_SCHEMA["description"],
@@ -59,6 +61,10 @@ DESCRIPTIONS: dict[str, str] = {
         "Totals over the router's finished jobs, all of them or the last N: how many passed, "
         "escalated or failed, each reason's count, median and total wall time in seconds, "
         "and local tokens."
+    ),
+    "list_endpoints": (
+        "The model endpoints the router's jobs run on: name, base URL, served model alias, "
+        "profile, and health (ok, loading or down), checked when called."
     ),
 }
 
@@ -111,7 +117,10 @@ async def run_blocking(
 
 
 def build_server(
-    manager: JobManager, *, progress_interval_s: float = PROGRESS_INTERVAL_S
+    manager: JobManager,
+    *,
+    list_endpoints: Callable[[], list[dict]] = list,
+    progress_interval_s: float = PROGRESS_INTERVAL_S,
 ) -> Server:
     async def list_tools(
         ctx: ServerRequestContext,
@@ -168,6 +177,8 @@ def build_server(
             if "last" in arguments:
                 records = records[-arguments["last"] :]
             return _result(summarize(records))
+        if name == "list_endpoints":
+            return _result(await anyio.to_thread.run_sync(list_endpoints))
         return _result({"error": f"unknown tool: {name}"}, error=True)
 
     return Server("hybrid-router", on_list_tools=list_tools, on_call_tool=call_tool)
