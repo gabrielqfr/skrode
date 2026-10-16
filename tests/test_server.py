@@ -10,7 +10,7 @@ import pytest
 from mcp.client import Client
 
 from router.manager import JobManager
-from router.server import build_server, compact
+from router.server import build_server
 
 ARGS_SCHEMA = json.loads(
     (Path(__file__).resolve().parents[1] / "schemas" / "run_local_subagent.json").read_text(
@@ -96,8 +96,9 @@ def test_a_blocking_call_returns_the_record_as_compact_json(tmp_path, mode):
 
     result = serve(fake, tmp_path, scenario, mode=mode)
     assert result.is_error is False
-    record = {"job_id": fake.job_ids[0], "status": "passed", "summary": "Añadido: 1 test"}
-    assert result.content[0].text == compact(record)
+    assert result.content[0].text == (
+        '{"job_id":"' + fake.job_ids[0] + '","status":"passed","summary":"Añadido: 1 test"}'
+    )
     assert "Añadido" in result.content[0].text
     assert fake.args == [ARGS]
 
@@ -201,7 +202,7 @@ def test_cancel_job_ends_a_queued_job_at_once(tmp_path):
     assert cancelled["state"] == "done"
     assert cancelled["record"]["reason"] == "cancelled"
     assert cancelled["record"]["detail"] == "cancelled while queued"
-    assert len(fake.job_ids) == 1
+    assert queued["job_id"] not in fake.job_ids
 
 
 def test_cancel_job_stops_a_running_job(tmp_path):
@@ -235,6 +236,29 @@ def test_a_client_that_gives_up_on_a_blocking_call_cancels_its_job(tmp_path, mod
     try:
         anyio.run(main)
         [state] = manager.wait(fake.job_ids, 5)
+    finally:
+        fake.release.set()
+        manager.close()
+    assert state["state"] == "done"
+    assert state["record"]["reason"] == "cancelled"
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_giving_up_cancels_promptly_at_the_default_interval(tmp_path, mode):
+    # without abandon_on_cancel the call would sit in manager.wait for the whole 30 s
+    fake = FakeRun()
+    manager = JobManager(fake, profile_name="test-profile", state_dir=tmp_path)
+    server = build_server(manager, progress_interval_s=30)
+
+    async def main():
+        async with Client(server, mode=mode) as client:
+            with anyio.move_on_after(0.3):
+                await client.call_tool("run_local_subagent", ARGS)
+            [state] = await anyio.to_thread.run_sync(manager.wait, fake.job_ids, 2)
+            return state
+
+    try:
+        state = anyio.run(main)
     finally:
         fake.release.set()
         manager.close()
