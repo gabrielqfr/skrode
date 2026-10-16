@@ -11,6 +11,7 @@ from mcp.client import Client
 
 from router.manager import JobManager
 from router.server import build_server
+from router.stats import summarize
 
 ARGS_SCHEMA = json.loads(
     (Path(__file__).resolve().parents[1] / "schemas" / "run_local_subagent.json").read_text(
@@ -68,7 +69,7 @@ def release_after(fake, seconds):
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_lists_the_four_tools(tmp_path, mode):
+def test_lists_the_job_tools(tmp_path, mode):
     async def scenario(client):
         return (await client.list_tools()).tools
 
@@ -78,6 +79,7 @@ def test_lists_the_four_tools(tmp_path, mode):
         "job_status",
         "wait_jobs",
         "cancel_job",
+        "stats",
     ]
     assert tools[0].input_schema == ARGS_SCHEMA
     assert tools[0].description == ARGS_SCHEMA["description"]
@@ -288,6 +290,55 @@ def test_an_unknown_tool_is_an_error(tmp_path):
     result = serve(FakeRun(), tmp_path, scenario)
     assert result.is_error is True
     assert payload(result) == {"error": "unknown tool: run_remote_subagent"}
+
+
+def test_stats_totals_the_job_store(tmp_path):
+    records = [
+        {
+            "job_id": "j-20261015-aaaaaa",
+            "status": "passed",
+            "wall_s": 10.0,
+            "local_tokens": {"prompt": 100, "completion": 20},
+        },
+        {
+            "job_id": "j-20261015-bbbbbb",
+            "status": "failed",
+            "reason": "endpoint",
+            "wall_s": 2.0,
+            "local_tokens": {"prompt": 0, "completion": 0},
+        },
+    ]
+    store = "".join(json.dumps(record) + "\n" for record in records)
+    (tmp_path / "jobs.jsonl").write_text(store, encoding="utf-8")
+
+    async def scenario(client):
+        every = await client.call_tool("stats", {})
+        last = await client.call_tool("stats", {"last": 1})
+        return every, last
+
+    every, last = serve(FakeRun(), tmp_path, scenario)
+    assert every.is_error is False
+    assert payload(every)["jobs"] == 2
+    assert payload(every)["status"] == {"passed": 1, "escalate": 0, "failed": 1}
+    assert payload(every) == summarize(records)
+    assert payload(last)["jobs"] == 1
+    assert payload(last) == summarize(records[-1:])
+
+
+def test_stats_of_an_empty_store_is_all_zeros(tmp_path):
+    async def scenario(client):
+        return await client.call_tool("stats", {})
+
+    assert payload(serve(FakeRun(), tmp_path, scenario)) == summarize([])
+
+
+def test_stats_rejects_a_last_below_one(tmp_path):
+    async def scenario(client):
+        return await client.call_tool("stats", {"last": 0})
+
+    result = serve(FakeRun(), tmp_path, scenario)
+    assert result.is_error is True
+    assert payload(result)["error"].startswith("bad arguments: ")
 
 
 def test_an_unseen_job_id_is_unknown(tmp_path):

@@ -1,4 +1,4 @@
-"""The MCP stdio server's tools: run_local_subagent, job_status, wait_jobs and cancel_job."""
+"""The MCP stdio server's tools: run_local_subagent, job_status, wait_jobs, cancel_job, stats."""
 
 import json
 import time
@@ -9,8 +9,9 @@ from jsonschema import Draft202012Validator, exceptions
 from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel import Server
 
-from router.jobs import ARGS_SCHEMA, _error_line
+from router.jobs import ARGS_SCHEMA, _error_line, load_records
 from router.manager import WAIT_LIMIT_S, JobManager
+from router.stats import summarize
 
 PROGRESS_INTERVAL_S = 30.0  # Claude Code drops a stdio call that is silent for 30 minutes
 
@@ -34,6 +35,11 @@ SCHEMAS: dict[str, dict] = {
         },
     },
     "cancel_job": _ONE_JOB,
+    "stats": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"last": {"type": "integer", "minimum": 1, "maximum": 10000}},
+    },
 }
 DESCRIPTIONS: dict[str, str] = {
     "run_local_subagent": ARGS_SCHEMA["description"],
@@ -48,6 +54,11 @@ DESCRIPTIONS: dict[str, str] = {
     "cancel_job": (
         "Cancel a job. A queued job ends at once; a running job stops before its next model "
         "call. Returns the job's state as job_status does."
+    ),
+    "stats": (
+        "Totals over the router's finished jobs, all of them or the last N: how many passed, "
+        "escalated or failed, each reason's count, median and total wall time in seconds, "
+        "and local tokens."
     ),
 }
 
@@ -152,6 +163,11 @@ def build_server(
             return _result(states)
         if name == "cancel_job":
             return _result(manager.cancel(arguments["job_id"]))
+        if name == "stats":
+            records = await anyio.to_thread.run_sync(load_records, manager.state_dir)
+            if "last" in arguments:
+                records = records[-arguments["last"] :]
+            return _result(summarize(records))
         return _result({"error": f"unknown tool: {name}"}, error=True)
 
     return Server("hybrid-router", on_list_tools=list_tools, on_call_tool=call_tool)

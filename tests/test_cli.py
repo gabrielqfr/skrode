@@ -15,7 +15,7 @@ from router.llm import LLMClient
 from router.profiles import load_profile, request_params
 
 REPO = Path(__file__).resolve().parents[1]
-TOOLS = ["run_local_subagent", "job_status", "wait_jobs", "cancel_job"]
+TOOLS = ["run_local_subagent", "job_status", "wait_jobs", "cancel_job", "stats"]
 
 
 @pytest.fixture
@@ -146,7 +146,7 @@ def test_the_cli_module_does_not_import_mcp():
 
 
 @pytest.mark.parametrize("mode", ["legacy", "2026-07-28"])
-def test_the_command_lists_the_four_tools_over_stdio(tmp_path, mode):
+def test_the_command_lists_the_tools_over_stdio(tmp_path, mode):
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "router.cli", "--state-dir", str(tmp_path)],
