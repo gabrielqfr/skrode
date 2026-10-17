@@ -1,0 +1,13 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.2 <bench-repos>/wt/claude-haiku-subagent-watcher-stopped-notice-r3/web[39m
+
+ [32m✓[39m src/lib/home.test.ts [2m([22m[2m56 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m56 passed[39m[22m[90m (56)[39m
+[2m   Start at [22m 17:34:38
+[2m   Duration [22m 200ms[2m (transform 55%, import 29%, tests 13%, worker 2%)[22m
+
+$ oxlint
+Found 0 warnings and 0 errors.
+Finished in 18ms on 218 files with 104 rules using 16 threads.

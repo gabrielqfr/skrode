@@ -1,0 +1,215 @@
+diff --git a/web/src/components/home/FirstRun.tsx b/web/src/components/home/FirstRun.tsx
+index 96e998c..c077d77 100644
+--- a/web/src/components/home/FirstRun.tsx
++++ b/web/src/components/home/FirstRun.tsx
+@@ -1,9 +1,9 @@
+ import type { LiveStatus } from '../../api'
+-import { firstRunSteps, NOT_WATCHING_SENTENCE } from '../../lib/home'
++import { firstRunSteps, NOT_WATCHING_SENTENCE, watcherCallout } from '../../lib/home'
+ import { OnboardingSteps, SectionLabel } from '../ui'
+ 
+-const STEPS = [
+-  { title: 'The tracker is watching Arena', detail: NOT_WATCHING_SENTENCE },
++const STEPS = (live: LiveStatus | undefined) => [
++  { title: 'The tracker is watching Arena', detail: watcherCallout(live) ?? NOT_WATCHING_SENTENCE },
+   {
+     title: 'Arena is writing its log',
+     detail:
+@@ -26,6 +26,7 @@ const WILL_APPEAR = [
+  *  to do), and what will appear. */
+ export function FirstRun({ live }: { live: LiveStatus | undefined }) {
+   const states = firstRunSteps(live)
++  const steps = STEPS(live)
+   return (
+     <section className="space-y-6 rounded-hero border border-edge bg-surface px-5 py-6 shadow-lift md:px-9 md:py-8">
+       <div className="space-y-2">
+@@ -35,7 +36,7 @@ export function FirstRun({ live }: { live: LiveStatus | undefined }) {
+         </p>
+       </div>
+       <div className="max-w-3xl">
+-        <OnboardingSteps steps={STEPS.map((step, index) => ({ ...step, state: states[index] }))} />
++        <OnboardingSteps steps={steps.map((step, index) => ({ ...step, state: states[index] }))} />
+       </div>
+       <div className="space-y-2">
+         <SectionLabel>What will appear here</SectionLabel>
+diff --git a/web/src/lib/home.ts b/web/src/lib/home.ts
+index 47f54dc..8c79ba5 100644
+--- a/web/src/lib/home.ts
++++ b/web/src/lib/home.ts
+@@ -38,6 +38,41 @@ export const UNNAMED_DECK_IN_SENTENCE = 'your unnamed deck'
+ export const NOT_WATCHING_SENTENCE =
+   "The tracker is running without watching Arena's log, so a match played now is not recorded by it. Restart the tracker with watching turned on."
+ 
++/** Live's callout and first run's first step when the watcher process
++ *  started and then stopped on its own (`watcher_stopped` in `/api/live`):
++ *  the log file has the reason, so the fix is a restart, not a setting. */
++export const WATCHER_STOPPED_SENTENCE =
++  "The tracker stopped watching Arena's log after it started, so a match played now is not recorded. Restart the tracker; its log file says what went wrong."
++
++/** What Live says about the heartbeat, or `null` when it has nothing to
++ *  say: stopped first — it also reads as not watching, and the wrong fix
++ *  (turning watching on) would be no fix at all. */
++export function watcherCallout(
++  live: { watching: boolean; watcher_stopped?: boolean } | undefined,
++): string | null {
++  if (live == null) return null
++  if (live.watcher_stopped) return WATCHER_STOPPED_SENTENCE
++  return live.watching ? null : NOT_WATCHING_SENTENCE
++}
++
++/** The pill's state, one at a time, the first that holds: the heartbeat's
++ *  last request failed, the watcher stopped on its own, a match in
++ *  progress, watching Arena, not watching. */
++export type LiveState = 'down' | 'stopped' | 'match' | 'watching' | 'idle'
++
++export function liveState(input: {
++  isError: boolean
++  watcherStopped: boolean
++  matchInProgress: boolean
++  watching: boolean
++}): LiveState {
++  if (input.isError) return 'down'
++  if (input.watcherStopped) return 'stopped'
++  if (input.matchInProgress) return 'match'
++  if (input.watching) return 'watching'
++  return 'idle'
++}
++
+ export function isFinished(match: Match): boolean {
+   return match.result === 'win' || match.result === 'loss' || match.result === 'draw'
+ }
+diff --git a/web/src/shell/LiveStatus.tsx b/web/src/shell/LiveStatus.tsx
+index ff7a831..c6d3543 100644
+--- a/web/src/shell/LiveStatus.tsx
++++ b/web/src/shell/LiveStatus.tsx
+@@ -2,29 +2,30 @@ import { useEffect, useId, useRef, useState } from 'react'
+ import { useLocation } from 'react-router'
+ import { useLive } from '../api'
+ import { TextLink } from '../components/ui'
++import { type LiveState, liveState, WATCHER_STOPPED_SENTENCE } from '../lib/home'
+ import { useMatchInProgress } from '../lib/liveMatch'
+ import { ago, useNow } from '../lib/time'
+ 
+-type State = 'down' | 'match' | 'watching' | 'idle'
+-
+-const WORDS: Record<State, string> = {
++const WORDS: Record<LiveState, string> = {
+   down: 'Tracker not running',
++  stopped: 'Watcher stopped',
+   match: 'Match in progress',
+   watching: 'Watching Arena',
+   idle: 'Not watching',
+ }
+ 
+ // Never colour alone: the dot is decoration, the words are the fact.
+-const DOT: Record<State, string> = {
++const DOT: Record<LiveState, string> = {
+   down: 'bg-warn',
++  stopped: 'bg-warn',
+   match: 'animate-pulse bg-s3',
+   watching: 'animate-pulse bg-s3',
+   idle: 'bg-muted',
+ }
+ 
+ /** The tracker's state, one at a time, the first that holds: not running
+- *  (the heartbeat's last request failed), a match in progress, watching
+- *  Arena, not watching. The words also sit in a polite
++ *  (the heartbeat's last request failed), stopped after starting, a match in
++ *  progress, watching Arena, not watching. The words also sit in a polite
+  *  live region of their own, out of sight beside the pill and never around
+  *  it, so a change is announced, the control is not read again with it,
+  *  and nothing takes focus; under 48rem the pill is its dot alone and the
+@@ -67,13 +68,12 @@ export function LiveStatus({ className = '' }: { className?: string }) {
+   // Nothing to say until the first beat answers either way.
+   if (live.isPending) return null
+ 
+-  const state: State = live.isError
+-    ? 'down'
+-    : matchInProgress
+-      ? 'match'
+-      : live.data.watching
+-        ? 'watching'
+-        : 'idle'
++  const state: LiveState = liveState({
++    isError: live.isError,
++    watcherStopped: Boolean(live.data?.watcher_stopped),
++    matchInProgress,
++    watching: Boolean(live.data?.watching),
++  })
+   const watching = Boolean(live.data?.watching)
+ 
+   // last_ingest_at is when data last *changed*, not when the reader last
+@@ -114,7 +114,9 @@ export function LiveStatus({ className = '' }: { className?: string }) {
+               )}
+               {/* A match in progress says what watching or not
+                   watching says: the log is followed only when it is. */}
+-              {watching ? (
++              {state === 'stopped' ? (
++                <p>{WATCHER_STOPPED_SENTENCE}</p>
++              ) : watching ? (
+                 <p>The tracker is following Arena's log as you play.</p>
+               ) : (
+                 <p>
+diff --git a/web/src/views/CurrentMatchView.tsx b/web/src/views/CurrentMatchView.tsx
+index a9f83ea..a9c5806 100644
+--- a/web/src/views/CurrentMatchView.tsx
++++ b/web/src/views/CurrentMatchView.tsx
+@@ -8,7 +8,7 @@ import { OpponentHandCard } from '../components/OpponentHandCard'
+ import { OpponentRead } from '../components/OpponentRead'
+ import { SideboardOpponentRail, SideboardPlanCard } from '../components/SideboardPlanCard'
+ import { Callout, Chip, Disclosure, EmptyState, ErrorNote, Loading, ManaPips, StatTile } from '../components/ui'
+-import { NOT_WATCHING_SENTENCE } from '../lib/home'
++import { WATCHER_STOPPED_SENTENCE, watcherCallout } from '../lib/home'
+ import { isLikelyAbandoned } from '../lib/liveMatch'
+ import { type LivePanel, livePanels } from '../lib/livePanels'
+ import { opponentLabelText } from '../lib/opponent'
+@@ -223,11 +223,12 @@ export function CurrentMatchView() {
+     // projected match row (table/opening_hand.py) — a decision can be
+     // pending here even though there is nothing else to show yet.
+     if (!openingHand) {
++      const callout = watcherCallout(live.data)
+       // The live status is hidden from 48rem up here, so while the tracker
+       // is not watching the page says so itself.
+       return (
+         <div className="flex flex-col gap-3">
+-          {live.data && !live.data.watching && <Callout tone="warn">{NOT_WATCHING_SENTENCE}</Callout>}
++          {callout && <Callout tone="warn">{callout}</Callout>}
+           <EmptyState
+             icon={placeById('live').icon}
+             title="No match in progress"
+@@ -240,6 +241,11 @@ export function CurrentMatchView() {
+     // the hand's read is advice and nothing else is known yet.
+     return (
+       <div className="flex h-full min-h-0 flex-col gap-3">
++        {live.data?.watcher_stopped && (
++          <div className="shrink-0">
++            <Callout tone="warn">{WATCHER_STOPPED_SENTENCE}</Callout>
++          </div>
++        )}
+         <MatchStatusStrip match={null} openingHand={openingHand} adviceOff={!advice} />
+         <div className="min-h-0 flex-1 overflow-hidden">
+           {advice ? (
+@@ -266,6 +272,11 @@ export function CurrentMatchView() {
+   if (intermission) {
+     return (
+       <div className="flex h-full min-h-0 flex-col gap-3">
++        {live.data?.watcher_stopped && (
++          <div className="shrink-0">
++            <Callout tone="warn">{WATCHER_STOPPED_SENTENCE}</Callout>
++          </div>
++        )}
+         <MatchStatusStrip match={match} openingHand={null} intermission={intermission} />
+         <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto sm:grid-cols-[1fr_360px]">
+           <div className="min-h-0">
+@@ -328,6 +339,11 @@ export function CurrentMatchView() {
+ 
+   return (
+     <div className="flex h-full min-h-0 flex-col gap-3">
++      {live.data?.watcher_stopped && (
++        <div className="shrink-0">
++          <Callout tone="warn">{WATCHER_STOPPED_SENTENCE}</Callout>
++        </div>
++      )}
+       <MatchStatusStrip match={match} openingHand={openingHand} adviceOff={!advice} />
+ 
+       <div className="grid min-h-0 flex-1 gap-3 sm:grid-cols-[1fr_360px]">

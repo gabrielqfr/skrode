@@ -1,0 +1,37 @@
+diff --git a/web/src/bridge.ts b/web/src/bridge.ts
+index 922924d..189ddd1 100644
+--- a/web/src/bridge.ts
++++ b/web/src/bridge.ts
+@@ -179,8 +179,9 @@ export function shellFrom(raw: RawShell, settings: BridgeSettings): Shell {
+  *  changes identity only when a change event arrives. It listens to the
+  *  shell from the moment it is made and never stops, so an event published
+  *  while no page is listening (a backup that ends after the person left
+- *  Settings) is in the next snapshot. `subscribe` manages React's
+- *  listeners alone. */
++ *  Settings) is in the next snapshot. The dashboard makes its own store at
++ *  start, in `startShellStore`, so it hears a change event published before
++ *  any page reads the shell. `subscribe` manages React's listeners alone. */
+ export function shellStore(raw: RawShell | undefined): {
+   subscribe(listener: () => void): () => void
+   snapshot(): Shell | null
+@@ -214,8 +215,19 @@ function storeOfGlobal() {
+   return held.store
+ }
+ 
++/** Makes the dashboard's store now, so it hears change events from app start,
++ *  not from the first page that reads the shell. */
++export function startShellStore() {
++  return storeOfGlobal()
++}
++
++startShellStore()
++
+ /** The shell the dashboard runs in, kept current by its change events. A
+- *  browser has none, and gets `null`, as does a shell with no settings yet. */
++ *  browser has none, and gets `null`, as does a shell with no settings yet.
++ *  The store is made at start (`startShellStore`), not at the first
++ *  `useShell()`, so an event that arrives before any page reads it is in the
++ *  snapshot. */
+ export function useShell(): Shell | null {
+   const store = storeOfGlobal()
+   return useSyncExternalStore(store.subscribe, store.snapshot)

@@ -1,0 +1,149 @@
+diff --git a/datasette/default_actions.py b/datasette/default_actions.py
+index 2f78570b..602e0df4 100644
+--- a/datasette/default_actions.py
++++ b/datasette/default_actions.py
+@@ -61,6 +61,12 @@ def register_actions():
+             description="Create tables",
+             resource_class=DatabaseResource,
+         ),
++        Action(
++            name="create-view",
++            abbr="cv",
++            description="Create views",
++            resource_class=DatabaseResource,
++        ),
+         Action(
+             name="store-query",
+             abbr="sq",
+@@ -111,6 +117,12 @@ def register_actions():
+             description="Drop tables",
+             resource_class=TableResource,
+         ),
++        Action(
++            name="drop-view",
++            abbr="dv",
++            description="Drop views",
++            resource_class=TableResource,
++        ),
+         # Query-level actions (child-level)
+         Action(
+             name="view-query",
+diff --git a/datasette/utils/sql_analysis.py b/datasette/utils/sql_analysis.py
+index 3a509bd2..1be28982 100644
+--- a/datasette/utils/sql_analysis.py
++++ b/datasette/utils/sql_analysis.py
+@@ -488,17 +488,17 @@ def analyze_sql_tables(
+         and key.operation in {"create", "alter", "drop"}
+         for key in operations
+     )
+-    dropped_tables = {
++    dropped_tables_and_views = {
+         (key.database, key.table)
+         for key in operations
+-        if key.operation == "drop" and key.target_type == "table"
++        if key.operation == "drop" and key.target_type in {"table", "view"}
+     }
+ 
+     def key_is_drop_table_delete(key: OperationKey) -> bool:
+         return (
+             key.operation == "delete"
+             and key.target_type == "table"
+-            and (key.database, key.table) in dropped_tables
++            and (key.database, key.table) in dropped_tables_and_views
+         )
+ 
+     has_user_table_access_in_schema_operation = any(
+diff --git a/datasette/write_sql.py b/datasette/write_sql.py
+index cdc0c6d3..73e1c531 100644
+--- a/datasette/write_sql.py
++++ b/datasette/write_sql.py
+@@ -138,6 +138,17 @@ def decision_for_write_sql_operation(
+                 ),
+             )
+         )
++    if operation.operation == "create" and operation.target_type == "view":
++        if operation.database is None:
++            return UnsupportedWriteSqlOperation(unsupported_message)
++        return RequireWriteSqlPermissions(
++            (
++                PermissionRequirement(
++                    action="create-view",
++                    resource=DatabaseResource(database=operation.database),
++                ),
++            )
++        )
+     if (
+         operation.operation == "alter"
+         and operation.target_type == "table"
+@@ -170,6 +181,22 @@ def decision_for_write_sql_operation(
+                 ),
+             )
+         )
++    if (
++        operation.operation == "drop"
++        and operation.target_type == "view"
++        and operation.database is not None
++        and operation.table is not None
++    ):
++        return RequireWriteSqlPermissions(
++            (
++                PermissionRequirement(
++                    action="drop-view",
++                    resource=TableResource(
++                        database=operation.database, table=operation.table
++                    ),
++                ),
++            )
++        )
+     if (
+         operation.operation in {"create", "drop"}
+         and operation.target_type == "index"
+diff --git a/docs/authentication.rst b/docs/authentication.rst
+index 8101699c..e05e0912 100644
+--- a/docs/authentication.rst
++++ b/docs/authentication.rst
+@@ -50,7 +50,7 @@ The one exception is the "root" account, which you can sign into while using Dat
+ The ``--root`` flag is designed for local development and testing. When you start Datasette with ``--root``, the root user automatically receives every permission, including:
+ 
+ * All view permissions (``view-instance``, ``view-database``, ``view-table``, etc.)
+-* All write permissions (``insert-row``, ``update-row``, ``delete-row``, ``create-table``, ``alter-table``, ``set-column-type``, ``drop-table``)
++* All write permissions (``insert-row``, ``update-row``, ``delete-row``, ``create-table``, ``create-view``, ``alter-table``, ``set-column-type``, ``drop-table``, ``drop-view``)
+ * Debug permissions (``permissions-debug``, ``debug-menu``)
+ * Any custom permissions defined by plugins
+ 
+@@ -1386,6 +1386,16 @@ create-table
+ 
+ Actor is allowed to create a database table.
+ 
++``resource`` - ``datasette.resources.DatabaseResource(database)``
++    ``database`` is the name of the database (string)
++
++.. _actions_create_view:
++
++create-view
++-----------
++
++Actor is allowed to create a database view.
++
+ ``resource`` - ``datasette.resources.DatabaseResource(database)``
+     ``database`` is the name of the database (string)
+ 
+@@ -1425,6 +1435,18 @@ Actor is allowed to drop a database table.
+ 
+     ``table`` is the name of the table (string)
+ 
++.. _actions_drop_view:
++
++drop-view
++----------
++
++Actor is allowed to drop a database view.
++
++``resource`` - ``datasette.resources.TableResource(database, table)``
++    ``database`` is the name of the database (string)
++
++    ``table`` is the name of the view (string)
++
+ .. _actions_execute_sql:
+ 
+ execute-sql

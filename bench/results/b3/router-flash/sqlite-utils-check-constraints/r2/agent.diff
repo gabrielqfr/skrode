@@ -1,0 +1,893 @@
+diff --git a/sqlite_utils/create_table_parser.py b/sqlite_utils/create_table_parser.py
+new file mode 100644
+index 0000000..356c89e
+--- /dev/null
++++ b/sqlite_utils/create_table_parser.py
+@@ -0,0 +1,641 @@
++"""A small SQL lexer and parser for ``CREATE TABLE`` statements.
++
++SQLite has no pragma for CHECK constraints, so ``table.transform()`` (which
++rebuilds a table) has no way of knowing about them, and it also loses any
++comments that were part of the original ``CREATE TABLE``.  This module
++implements just enough lexing and parsing to recover those details.
++
++Standard library only.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Any
++
++__all__ = [
++    "Check",
++    "ColumnComments",
++    "ParseError",
++    "parse_checks",
++    "parse_column_comments",
++    "check_references_identifier",
++    "rewrite_check_expression",
++    "sql_ends_in_line_comment",
++]
++
++
++class ParseError(ValueError):
++    "Raised when a SQL statement cannot be parsed."
++
++
++@dataclass
++class Check:
++    "A single CHECK constraint extracted from a CREATE TABLE statement."
++
++    check: str
++    name: str = ""
++    column: str = ""
++    options: list[Any] | None = None
++    sql: str = field(default="", compare=False, repr=False)
++    start: int = field(default=-1, compare=False, repr=False)
++    end: int = field(default=-1, compare=False, repr=False)
++
++
++@dataclass(frozen=True)
++class ColumnComments:
++    "Comments that surround a column definition."
++
++    before: str = ""
++    after: str = ""
++
++
++@dataclass(frozen=True)
++class _Token:
++    kind: str
++    text: str
++    start: int
++    end: int
++
++
++# The set of SQLite keywords. A bare word that appears in this set is never
++# treated as an identifier.
++KEYWORDS = frozenset(
++    """
++    ABORT ACTION ADD AFTER ALL ALTER ALWAYS ANALYZE AND AS ASC ATTACH
++    AUTOINCREMENT BEFORE BEGIN BETWEEN BY CASCADE CASE CAST CHECK COLLATE
++    COLUMN COMMIT CONFLICT CONSTRAINT CREATE CROSS CURRENT CURRENT_DATE
++    CURRENT_TIME CURRENT_TIMESTAMP DATABASE DEFAULT DEFERRABLE DEFERRED DELETE
++    DESC DETACH DISTINCT DO DROP EACH ELSE END ESCAPE EXCEPT EXCLUDE EXCLUSIVE
++    EXISTS EXPLAIN FAIL FILTER FIRST FOLLOWING FOR FOREIGN FROM FULL GENERATED
++    GLOB GROUP GROUPS HAVING IF IGNORE IMMEDIATE IN INDEX INDEXED INITIALLY
++    INNER INSERT INSTEAD INTERSECT INTO IS ISNULL JOIN KEY LAST LEFT LIKE LIMIT
++    MATCH MATERIALIZED NATURAL NO NOT NOTHING NOTNULL NULL NULLS OF OFFSET ON
++    OR ORDER OTHERS OUTER OVER PARTITION PLAN PRAGMA PRECEDING PRIMARY QUERY
++    RAISE RANGE RECURSIVE REFERENCES REGEXP REINDEX RELEASE RENAME REPLACE
++    RESTRICT RETURNING RIGHT ROLLBACK ROW ROWS SAVEPOINT SELECT SET TABLE TEMP
++    TEMPORARY THEN TIES TO TRANSACTION TRIGGER UNBOUNDED UNION UNIQUE UPDATE
++    USING VACUUM VALUES VIEW VIRTUAL WHEN WHERE WINDOW WITH WITHOUT
++    """.split()
++)
++
++_TABLE_CONSTRAINT_KEYWORDS = frozenset(
++    {"CONSTRAINT", "PRIMARY", "UNIQUE", "CHECK", "FOREIGN"}
++)
++
++_WHITESPACE = " \t\n\r\f\v"
++
++_CASE_FOLD = str.maketrans(
++    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"
++)
++
++_FAIL = object()
++
++
++def _fold(value: str) -> str:
++    "ASCII-only case folding, matching SQLite's identifier rules."
++    return value.translate(_CASE_FOLD)
++
++
++def _is_ascii_digit(char: str) -> bool:
++    return "0" <= char <= "9"
++
++
++def _is_word_start(char: str) -> bool:
++    return char.isalpha() or char in "_$" or ord(char) >= 0x80
++
++
++def _is_word_char(char: str) -> bool:
++    return char.isalnum() or char in "_$" or ord(char) >= 0x80
++
++
++def _scan_number(sql: str, i: int) -> int:
++    n = len(sql)
++    if sql[i : i + 2].lower() == "0x":
++        j = i + 2
++        while j < n and sql[j] in "0123456789abcdefABCDEF":
++            j += 1
++        return j
++    j = i
++    while j < n and _is_ascii_digit(sql[j]):
++        j += 1
++    if j < n and sql[j] == ".":
++        j += 1
++        while j < n and _is_ascii_digit(sql[j]):
++            j += 1
++    if j < n and sql[j] in "eE":
++        k = j + 1
++        if k < n and sql[k] in "+-":
++            k += 1
++        if k < n and _is_ascii_digit(sql[k]):
++            k += 1
++            while k < n and _is_ascii_digit(sql[k]):
++                k += 1
++            j = k
++    return j
++
++
++def lex(sql: str) -> list[_Token]:
++    """Turn SQL text into a list of tokens that retain their offsets.
++
++    Whitespace and comments are returned as trivia tokens.
++    """
++    tokens: list[_Token] = []
++    i = 0
++    n = len(sql)
++    while i < n:
++        char = sql[i]
++        if char in _WHITESPACE:
++            j = i
++            while j < n and sql[j] in _WHITESPACE:
++                j += 1
++            tokens.append(_Token("whitespace", sql[i:j], i, j))
++            i = j
++        elif char == "-" and i + 1 < n and sql[i + 1] == "-":
++            j = sql.find("\n", i)
++            if j == -1:
++                j = n
++            else:
++                j += 1
++            tokens.append(_Token("comment", sql[i:j], i, j))
++            i = j
++        elif char == "/" and i + 1 < n and sql[i + 1] == "*":
++            j = sql.find("*/", i + 2)
++            if j == -1:
++                raise ParseError("Unterminated comment")
++            j += 2
++            tokens.append(_Token("comment", sql[i:j], i, j))
++            i = j
++        elif char == "'":
++            j = i + 1
++            while True:
++                if j >= n:
++                    raise ParseError("Unterminated string")
++                if sql[j] == "'":
++                    if j + 1 < n and sql[j + 1] == "'":
++                        j += 2
++                        continue
++                    j += 1
++                    break
++                j += 1
++            tokens.append(_Token("string", sql[i:j], i, j))
++            i = j
++        elif char in ('"', "`"):
++            quote = char
++            j = i + 1
++            while True:
++                if j >= n:
++                    raise ParseError("Unterminated quoted identifier")
++                if sql[j] == quote:
++                    if j + 1 < n and sql[j + 1] == quote:
++                        j += 2
++                        continue
++                    j += 1
++                    break
++                j += 1
++            tokens.append(_Token("identifier", sql[i:j], i, j))
++            i = j
++        elif char == "[":
++            j = sql.find("]", i + 1)
++            if j == -1:
++                raise ParseError("Unterminated quoted identifier")
++            j += 1
++            tokens.append(_Token("identifier", sql[i:j], i, j))
++            i = j
++        elif _is_word_start(char):
++            j = i
++            while j < n and _is_word_char(sql[j]):
++                j += 1
++            tokens.append(_Token("word", sql[i:j], i, j))
++            i = j
++        elif _is_ascii_digit(char) or (
++            char == "." and i + 1 < n and _is_ascii_digit(sql[i + 1])
++        ):
++            j = _scan_number(sql, i)
++            tokens.append(_Token("number", sql[i:j], i, j))
++            i = j
++        else:
++            tokens.append(_Token("punctuation", char, i, i + 1))
++            i += 1
++    return tokens
++
++
++def _nontrivia(tokens: list[_Token]) -> list[_Token]:
++    return [t for t in tokens if t.kind not in ("whitespace", "comment")]
++
++
++def _unquote_identifier(text: str) -> str:
++    if not text:
++        return text
++    if text[0] == '"' and text[-1] == '"':
++        return text[1:-1].replace('""', '"')
++    if text[0] == "`" and text[-1] == "`":
++        return text[1:-1].replace("``", "`")
++    if text[0] == "[" and text[-1] == "]":
++        return text[1:-1]
++    return text
++
++
++def _unquote_string(text: str) -> str:
++    return text[1:-1].replace("''", "'")
++
++
++def _is_word(token: _Token, value: str) -> bool:
++    return token.kind == "word" and token.text.upper() == value
++
++
++def _create_table_body(
++    create_sql: str,
++) -> list[tuple[int, int, list[_Token]]] | None:
++    """Return the top-level items of a CREATE TABLE body.
++
++    Each item is ``(start, end, tokens)`` where ``start`` and ``end`` are
++    character offsets into ``create_sql`` and ``tokens`` are the item's
++    non-trivia tokens.  Returns ``None`` for a virtual table.  Raises
++    :class:`ParseError` for anything that is not a CREATE TABLE statement or
++    that has unbalanced parentheses.
++    """
++    tokens = lex(create_sql)
++    nt = _nontrivia(tokens)
++    if not nt or not _is_word(nt[0], "CREATE"):
++        raise ParseError("Not a CREATE TABLE statement")
++    idx = 1
++    if idx < len(nt) and nt[idx].kind == "word" and nt[idx].text.upper() in (
++        "TEMP",
++        "TEMPORARY",
++    ):
++        idx += 1
++    if idx < len(nt) and _is_word(nt[idx], "VIRTUAL"):
++        return None
++    if idx >= len(nt) or not _is_word(nt[idx], "TABLE"):
++        raise ParseError("Not a CREATE TABLE statement")
++    idx += 1
++    open_index = None
++    while idx < len(nt):
++        token = nt[idx]
++        if token.kind == "punctuation" and token.text == "(":
++            open_index = idx
++            break
++        idx += 1
++    if open_index is None:
++        raise ParseError("Could not find the table body")
++    depth = 1
++    close_index = None
++    for k in range(open_index + 1, len(nt)):
++        token = nt[k]
++        if token.kind == "punctuation" and token.text == "(":
++            depth += 1
++        elif token.kind == "punctuation" and token.text == ")":
++            depth -= 1
++            if depth == 0:
++                close_index = k
++                break
++    if close_index is None:
++        raise ParseError("Unbalanced parentheses")
++    body_start = nt[open_index].end
++    body_end = nt[close_index].start
++    body_tokens = nt[open_index + 1 : close_index]
++    items: list[tuple[int, int, list[_Token]]] = []
++    item_start = body_start
++    depth = 0
++    for token in body_tokens:
++        if token.kind == "punctuation" and token.text == "(":
++            depth += 1
++        elif token.kind == "punctuation" and token.text == ")":
++            depth -= 1
++            if depth < 0:
++                raise ParseError("Unbalanced parentheses")
++        elif token.kind == "punctuation" and token.text == "," and depth == 0:
++            items.append((item_start, token.start, []))
++            item_start = token.end
++    items.append((item_start, body_end, []))
++    result: list[tuple[int, int, list[_Token]]] = []
++    for start, end, _ in items:
++        item_tokens = [t for t in body_tokens if t.start >= start and t.end <= end]
++        result.append((start, end, item_tokens))
++    return result
++
++
++def _matching_paren(tokens: list[_Token], index: int) -> int:
++    depth = 0
++    for j in range(index, len(tokens)):
++        token = tokens[j]
++        if token.kind == "punctuation" and token.text == "(":
++            depth += 1
++        elif token.kind == "punctuation" and token.text == ")":
++            depth -= 1
++            if depth == 0:
++                return j
++    return -1
++
++
++def _strip_outer_parens(expression: str) -> str:
++    text = expression.strip()
++    while True:
++        tokens = _nontrivia(lex(text))
++        if (
++            len(tokens) >= 2
++            and tokens[0].kind == "punctuation"
++            and tokens[0].text == "("
++            and tokens[-1].kind == "punctuation"
++            and tokens[-1].text == ")"
++            and _matching_paren(tokens, 0) == len(tokens) - 1
++        ):
++            text = text[tokens[0].end : tokens[-1].start].strip()
++        else:
++            return text
++
++
++def _number_value(text: str) -> Any:
++    stripped = text.lstrip("+-")
++    negative = text.startswith("-")
++    try:
++        if stripped[:2].lower() == "0x":
++            value = int(stripped[2:], 16)
++            return -value if negative else value
++        if "." in text or "e" in text.lower():
++            return float(text)
++        return int(text)
++    except ValueError:
++        return _FAIL
++
++
++def _literal_value(group: list[_Token]) -> Any:
++    if len(group) == 1:
++        token = group[0]
++        if token.kind == "string":
++            return _unquote_string(token.text)
++        if token.kind == "number":
++            return _number_value(token.text)
++        if token.kind == "word":
++            upper = token.text.upper()
++            if upper == "NULL":
++                return None
++            if upper == "TRUE":
++                return True
++            if upper == "FALSE":
++                return False
++        return _FAIL
++    if (
++        len(group) == 2
++        and group[0].kind == "punctuation"
++        and group[0].text in ("-", "+")
++        and group[1].kind == "number"
++    ):
++        return _number_value(group[0].text + group[1].text)
++    return _FAIL
++
++
++def _split_commas(tokens: list[_Token]) -> list[list[_Token]] | None:
++    groups: list[list[_Token]] = []
++    current: list[_Token] = []
++    depth = 0
++    for token in tokens:
++        if token.kind == "punctuation" and token.text == "(":
++            depth += 1
++            current.append(token)
++        elif token.kind == "punctuation" and token.text == ")":
++            depth -= 1
++            if depth < 0:
++                return None
++            current.append(token)
++        elif token.kind == "punctuation" and token.text == "," and depth == 0:
++            groups.append(current)
++            current = []
++        else:
++            current.append(token)
++    if depth != 0:
++        return None
++    groups.append(current)
++    if any(not group for group in groups):
++        return None
++    return groups
++
++
++def _parse_options(expression: str, column: str) -> list[Any] | None:
++    if not column:
++        return None
++    stripped = _strip_outer_parens(expression)
++    try:
++        tokens = _nontrivia(lex(stripped))
++    except ParseError:
++        return None
++    if len(tokens) < 4:
++        return None
++    first, second = tokens[0], tokens[1]
++    if first.kind not in ("word", "identifier"):
++        return None
++    if _fold(_unquote_identifier(first.text)) != _fold(column):
++        return None
++    if not _is_word(second, "IN"):
++        return None
++    if not (tokens[2].kind == "punctuation" and tokens[2].text == "("):
++        return None
++    if not (tokens[-1].kind == "punctuation" and tokens[-1].text == ")"):
++        return None
++    if _matching_paren(tokens, 2) != len(tokens) - 1:
++        return None
++    groups = _split_commas(tokens[3:-1])
++    if groups is None:
++        return None
++    values: list[Any] = []
++    for group in groups:
++        value = _literal_value(group)
++        if value is _FAIL:
++            return None
++        values.append(value)
++    return values
++
++
++def _item_checks(sql: str, tokens: list[_Token]) -> list[Check]:
++    first = tokens[0]
++    is_table_constraint = (
++        first.kind == "word" and first.text.upper() in _TABLE_CONSTRAINT_KEYWORDS
++    )
++    column = "" if is_table_constraint else _unquote_identifier(first.text)
++    checks: list[Check] = []
++    i = 0 if is_table_constraint else 1
++    while i < len(tokens):
++        token = tokens[i]
++        if _is_word(token, "CHECK"):
++            if not (
++                i + 1 < len(tokens)
++                and tokens[i + 1].kind == "punctuation"
++                and tokens[i + 1].text == "("
++            ):
++                raise ParseError("CHECK not followed by (")
++            open_token = tokens[i + 1]
++            depth = 1
++            close_token = None
++            j = i + 2
++            while j < len(tokens):
++                candidate = tokens[j]
++                if candidate.kind == "punctuation" and candidate.text == "(":
++                    depth += 1
++                elif candidate.kind == "punctuation" and candidate.text == ")":
++                    depth -= 1
++                    if depth == 0:
++                        close_token = candidate
++                        break
++                j += 1
++            if close_token is None:
++                raise ParseError("Unbalanced parentheses in CHECK")
++            name = ""
++            constraint_start = token.start
++            if (
++                i >= 2
++                and tokens[i - 2].kind == "word"
++                and tokens[i - 2].text.upper() == "CONSTRAINT"
++            ):
++                name = _unquote_identifier(tokens[i - 1].text)
++                constraint_start = tokens[i - 2].start
++            elif i >= 1 and _is_word(tokens[i - 1], "CONSTRAINT"):
++                constraint_start = tokens[i - 1].start
++            check_text = sql[open_token.end : close_token.start].strip()
++            options = _parse_options(check_text, column) if column else None
++            checks.append(
++                Check(
++                    check_text,
++                    name=name,
++                    column=column,
++                    options=options,
++                    sql=sql[constraint_start : close_token.end],
++                    start=constraint_start,
++                    end=close_token.end,
++                )
++            )
++            i = j + 1
++            continue
++        i += 1
++    return checks
++
++
++def parse_checks(create_sql: str) -> list[Check]:
++    "Return the CHECK constraints defined by a CREATE TABLE statement."
++    body = _create_table_body(create_sql)
++    if body is None:
++        return []
++    checks: list[Check] = []
++    for _, _, tokens in body:
++        if not tokens:
++            continue
++        checks.extend(_item_checks(create_sql, tokens))
++    return checks
++
++
++def parse_column_comments(create_sql: str) -> dict[str, ColumnComments]:
++    "Return the comments surrounding each column definition."
++    try:
++        body = _create_table_body(create_sql)
++    except ParseError:
++        return {}
++    if body is None:
++        return {}
++    result: dict[str, ColumnComments] = {}
++    for start, end, tokens in body:
++        if not tokens:
++            continue
++        first = tokens[0]
++        if first.kind == "word" and first.text.upper() in _TABLE_CONSTRAINT_KEYWORDS:
++            continue
++        before = create_sql[start : first.start].strip()
++        after = create_sql[tokens[-1].end : end].strip()
++        if not before and not after:
++            continue
++        result[_unquote_identifier(first.text)] = ColumnComments(
++            before=before, after=after
++        )
++    return result
++
++
++def _is_identifier_token(tokens: list[_Token], index: int) -> bool:
++    token = tokens[index]
++    if token.kind == "identifier":
++        pass
++    elif token.kind == "word" and token.text.upper() not in KEYWORDS:
++        pass
++    else:
++        return False
++    if index + 1 < len(tokens):
++        following = tokens[index + 1]
++        if following.kind == "punctuation" and following.text in ("(", "."):
++            return False
++    if index - 1 >= 0:
++        preceding = tokens[index - 1]
++        if preceding.kind == "word" and preceding.text.upper() in ("COLLATE", "AS"):
++            return False
++    return True
++
++
++def check_references_identifier(expression: str, identifier: str) -> bool:
++    "True if the expression contains the given identifier as a token."
++    target = _fold(identifier)
++    tokens = _nontrivia(lex(expression))
++    for index, token in enumerate(tokens):
++        if not _is_identifier_token(tokens, index):
++            continue
++        if _fold(_unquote_identifier(token.text)) == target:
++            return True
++    return False
++
++
++def _is_valid_bare_identifier(value: str) -> bool:
++    if not value:
++        return False
++    if not _is_word_start(value[0]):
++        return False
++    return all(_is_word_char(char) for char in value)
++
++
++def _render_identifier(token: _Token, new_name: str) -> str:
++    if token.kind == "identifier":
++        quote = token.text[0]
++        if quote == '"':
++            return '"' + new_name.replace('"', '""') + '"'
++        if quote == "`":
++            return "`" + new_name.replace("`", "``") + "`"
++        if quote == "[":
++            return "[" + new_name + "]"
++    if _is_valid_bare_identifier(new_name) and new_name.upper() not in KEYWORDS:
++        return new_name
++    return '"' + new_name.replace('"', '""') + '"'
++
++
++def rewrite_check_expression(expression: str, rename: dict[str, str]) -> str:
++    "Rename identifier tokens in an expression, preserving quoting style."
++    if not rename:
++        return expression
++    folded_rename = {_fold(key): value for key, value in rename.items()}
++    tokens = lex(expression)
++    nontrivia = _nontrivia(tokens)
++    positions = {token.start: index for index, token in enumerate(nontrivia)}
++    parts: list[str] = []
++    cursor = 0
++    for token in tokens:
++        parts.append(expression[cursor : token.start])
++        replacement = token.text
++        index = positions.get(token.start)
++        if index is not None and _is_identifier_token(nontrivia, index):
++            key = _fold(_unquote_identifier(token.text))
++            if key in folded_rename:
++                replacement = _render_identifier(token, folded_rename[key])
++        parts.append(replacement)
++        cursor = token.end
++    return "".join(parts)
++
++
++def sql_ends_in_line_comment(sql: str) -> bool:
++    "True if the last token is a ``--`` comment that does not end in a newline."
++    tokens = lex(sql)
++    # Ignore trailing whitespace
++    index = len(tokens) - 1
++    while index >= 0 and tokens[index].kind == "whitespace":
++        index -= 1
++    if index < 0:
++        return False
++    last = tokens[index]
++    return (
++        last.kind == "comment"
++        and last.text.startswith("--")
++        and not last.text.endswith("\n")
++    )
+diff --git a/sqlite_utils/db.py b/sqlite_utils/db.py
+index 5307931..21925f6 100644
+--- a/sqlite_utils/db.py
++++ b/sqlite_utils/db.py
+@@ -27,6 +27,16 @@ from typing_extensions import Self
+ 
+ from sqlite_utils.plugins import ensure_plugins_loaded, pm
+ 
++from .create_table_parser import (
++    Check,
++    ColumnComments,
++    ParseError,
++    check_references_identifier,
++    parse_checks,
++    parse_column_comments,
++    rewrite_check_expression,
++    sql_ends_in_line_comment,
++)
+ from .utils import (
+     OperationalError,
+     chunks,
+@@ -113,6 +123,30 @@ def resolve_casing(name: str, candidates: Iterable[str]) -> str:
+     return name
+ 
+ 
++def _check_constraint_sql(check: Check) -> str:
++    "Render a CHECK constraint for a CREATE TABLE statement."
++    prefix = f"CONSTRAINT {quote_identifier(check.name)} " if check.name else ""
++    if sql_ends_in_line_comment(check.check):
++        return f"{prefix}CHECK ({check.check}\n)"
++    return f"{prefix}CHECK ({check.check})"
++
++
++def _column_definition_with_comments(
++    definition: str, comments: ColumnComments
++) -> str:
++    "Wrap a column definition with the comments that belong to it."
++    if comments.before:
++        before = textwrap.dedent(comments.before).strip()
++        before = "\n".join("   " + line for line in before.splitlines())
++        definition = before + "\n" + definition
++    if comments.after:
++        after = textwrap.dedent(comments.after).strip()
++        definition = definition + " " + after
++        if sql_ends_in_line_comment(after):
++            definition += "\n"
++    return definition
++
++
+ pd: Any = None
+ try:
+     pd = importlib.import_module("pandas")
+@@ -1379,6 +1413,9 @@ class Database:
+         extracts: dict[str, str] | list[str] | None = None,
+         if_not_exists: bool = False,
+         strict: bool = False,
++        *,
++        _checks: Iterable[Check] | None = None,
++        _column_comments: Mapping[str, ColumnComments] | None = None,
+     ) -> str:
+         """
+         Returns the SQL ``CREATE TABLE`` statement for creating the specified table.
+@@ -1395,6 +1432,8 @@ class Database:
+         :param extracts: List or dictionary of columns to be extracted during inserts, see :ref:`python_api_extracts`
+         :param if_not_exists: Use ``CREATE TABLE IF NOT EXISTS``
+         :param strict: Apply STRICT mode to table
++        :param _checks: CHECK constraints to include in the new table
++        :param _column_comments: Comments to attach to column definitions
+         """
+         if hash_id_columns and (hash_id is None):
+             hash_id = "id"
+@@ -1465,6 +1504,27 @@ class Database:
+                 column_items.insert(0, (pk, int))
+         elif pk:
+             pk = [resolve_casing(p, [c[0] for c in column_items]) for p in pk]
++        column_names = [c[0] for c in column_items]
++        # Group CHECK constraints by owning column, resolving casing against
++        # the columns of the new table
++        column_checks: dict[str, list[Check]] = {}
++        table_checks: list[Check] = []
++        for check in _checks or []:
++            if check.column:
++                resolved_column = resolve_casing(check.column, column_names)
++                if resolved_column not in column_names:
++                    raise AlterError(
++                        f"No such column for CHECK constraint: {check.column}"
++                    )
++                column_checks.setdefault(resolved_column, []).append(check)
++            else:
++                table_checks.append(check)
++        resolved_comments: dict[str, ColumnComments] = {}
++        if _column_comments:
++            for column_name, comments in _column_comments.items():
++                resolved_column = resolve_casing(column_name, column_names)
++                if resolved_column in column_names:
++                    resolved_comments[resolved_column] = comments
+         for column_name, column_type in column_items:
+             column_extras = []
+             if column_name == single_pk:
+@@ -1485,22 +1545,29 @@ class Database:
+             # Refs https://github.com/simonw/sqlite-utils/issues/644
+             if strict and column_type_str == "FLOAT":
+                 column_type_str = "REAL"
+-            column_defs.append(
+-                "   {} {column_type}{column_extras}".format(
+-                    quote_identifier(column_name),
+-                    column_type=column_type_str,
+-                    column_extras=(
+-                        (" " + " ".join(column_extras)) if column_extras else ""
+-                    ),
+-                )
++            column_def = "   {} {column_type}{column_extras}".format(
++                quote_identifier(column_name),
++                column_type=column_type_str,
++                column_extras=(
++                    (" " + " ".join(column_extras)) if column_extras else ""
++                ),
+             )
++            if column_name in column_checks:
++                column_def += " " + " ".join(
++                    _check_constraint_sql(check)
++                    for check in column_checks[column_name]
++                )
++            if column_name in resolved_comments:
++                column_def = _column_definition_with_comments(
++                    column_def, resolved_comments[column_name]
++                )
++            column_defs.append(column_def)
+         extra_pk = ""
+         if single_pk is None and pk and len(pk) > 1:
+             extra_pk = ",\n   PRIMARY KEY ({pks})".format(
+                 pks=", ".join([quote_identifier(p) for p in pk])
+             )
+         # Compound foreign keys become table-level FOREIGN KEY constraints
+-        column_names = [c[0] for c in column_items]
+         for fk in resolved_fks:
+             if not fk.is_compound:
+                 continue
+@@ -1519,6 +1586,10 @@ class Database:
+                     actions=_fk_actions_sql(fk),
+                 )
+             )
++        # Table-level CHECK constraints come after every column definition and
++        # table-level foreign key
++        for check in table_checks:
++            column_defs.append("   " + _check_constraint_sql(check))
+         columns_sql = ",\n".join(column_defs)
+         sql = """CREATE TABLE {if_not_exists}{table} (
+ {columns_sql}{extra_pk}
+@@ -2280,6 +2351,27 @@ class Table(Queryable):
+             return None
+         return match.groupdict()["using"].upper()
+ 
++    @property
++    def checks(self) -> list[Check]:
++        "List of CHECK constraints defined on this table."
++        if not self.exists() or self.virtual_table_using is not None:
++            return []
++        return parse_checks(self.schema)
++
++    @property
++    def column_checks(self) -> dict[str, list[Check]]:
++        "CHECK constraints grouped by the column they are attached to."
++        column_checks: dict[str, list[Check]] = {}
++        for check in self.checks:
++            if check.column:
++                column_checks.setdefault(check.column, []).append(check)
++        return column_checks
++
++    @property
++    def table_checks(self) -> list[Check]:
++        "CHECK constraints that are not attached to a single column."
++        return [check for check in self.checks if not check.column]
++
+     @property
+     def indexes(self) -> list[Index]:
+         "List of indexes defined on this table."
+@@ -2655,6 +2747,59 @@ class Table(Queryable):
+         if column_order is not None:
+             column_order = [resolve_casing(c, existing_columns) for c in column_order]
+ 
++        # Preserve CHECK constraints and column comments across the rebuild
++        try:
++            existing_checks = self.checks
++            existing_column_comments = parse_column_comments(self.schema)
++        except ParseError as ex:
++            raise TransformError(
++                f"Could not parse table schema for table {self.name!r}: {ex}"
++            )
++        dropped_columns_folded = {fold_identifier_case(c) for c in drop}
++        renamed_columns_folded = {
++            fold_identifier_case(k): v for k, v in rename.items()
++        }
++        checks_to_create: list[Check] = []
++        for check in existing_checks:
++            if check.column and fold_identifier_case(check.column) in dropped_columns_folded:
++                # The column this CHECK belongs to is being dropped
++                continue
++            referenced_dropped_column = None
++            for dropped_column in drop:
++                if check_references_identifier(check.check, dropped_column):
++                    referenced_dropped_column = dropped_column
++                    break
++            if referenced_dropped_column is not None:
++                raise TransformError(
++                    "Cannot drop column {column!r}: it is used by "
++                    "CHECK constraint {constraint!r}".format(
++                        column=referenced_dropped_column,
++                        constraint=check.name or check.check,
++                    )
++                )
++            new_column = check.column
++            if new_column:
++                new_column = (
++                    renamed_columns_folded.get(fold_identifier_case(new_column))
++                    or new_column
++                )
++            checks_to_create.append(
++                Check(
++                    rewrite_check_expression(check.check, rename),
++                    name=check.name,
++                    column=new_column,
++                )
++            )
++        column_comments_to_create: dict[str, ColumnComments] = {}
++        for column_name, comments in existing_column_comments.items():
++            if fold_identifier_case(column_name) in dropped_columns_folded:
++                continue
++            new_column = (
++                renamed_columns_folded.get(fold_identifier_case(column_name))
++                or column_name
++            )
++            column_comments_to_create[new_column] = comments
++
+         create_table_foreign_keys: list[ForeignKeyIndicator] = []
+ 
+         if foreign_keys is not None:
+@@ -2804,6 +2949,8 @@ class Table(Queryable):
+                 foreign_keys=create_table_foreign_keys,
+                 column_order=column_order,
+                 strict=self.strict if strict is None else strict,
++                _checks=checks_to_create,
++                _column_comments=column_comments_to_create,
+             ).strip()
+         )
+ 

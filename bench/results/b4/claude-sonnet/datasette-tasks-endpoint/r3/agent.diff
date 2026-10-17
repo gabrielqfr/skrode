@@ -1,0 +1,203 @@
+diff --git a/datasette/app.py b/datasette/app.py
+index e1321db8..7dd57741 100644
+--- a/datasette/app.py
++++ b/datasette/app.py
+@@ -2447,6 +2447,21 @@ ORDER BY allowed.parent, allowed.child
+             for p in ps
+         ]
+ 
++    def _tasks(self):
++        return {
++            "tasks": [
++                {
++                    "name": t.name,
++                    "state": t.state,
++                    "function": t.function,
++                    "started_at": t.started_at,
++                    "exception": repr(t.exception) if t.exception else None,
++                }
++                for t in self._background_tasks.tasks()
++            ],
++            "launched": self._background_tasks.launched,
++        }
++
+     def _threads(self):
+         if self.setting("num_sql_threads") == 0:
+             return {"num_threads": 0, "threads": []}
+@@ -2754,6 +2769,12 @@ ORDER BY allowed.parent, allowed.child
+             ),
+             r"/-/threads(\.(?P<format>json))?$",
+         )
++        add_route(
++            JsonDataView.as_view(
++                self, "tasks.json", self._tasks, permission="permissions-debug"
++            ),
++            r"/-/tasks(\.(?P<format>json))?$",
++        )
+         add_route(
+             JsonDataView.as_view(
+                 self,
+@@ -3039,7 +3060,7 @@ ORDER BY allowed.parent, allowed.child
+ 
+         Returns a :class:`~datasette.background_tasks.BackgroundTask`
+         handle (``.name``, ``.state``, ``.task``, ``.exception``,
+-        ``.started_at``, ``.plugin``, ``.cancel()``).
++        ``.started_at``, ``.function``, ``.cancel()``).
+ 
+         ``name`` defaults to ``func.__qualname__``; on a name collision a
+         ``-2``, ``-3``, ... suffix is appended, since names are how
+diff --git a/datasette/background_tasks.py b/datasette/background_tasks.py
+index ee5e5015..09574748 100644
+--- a/datasette/background_tasks.py
++++ b/datasette/background_tasks.py
+@@ -29,7 +29,6 @@ from __future__ import annotations
+ import asyncio
+ import datetime
+ import functools
+-import inspect
+ import logging
+ from collections.abc import Awaitable, Callable
+ 
+@@ -40,46 +39,13 @@ def _utcnow_iso() -> str:
+     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+ 
+ 
+-def _resolve_plugin_name(func: Callable) -> str | None:
+-    """Best-effort, cheap attempt to work out which registered plugin a
+-    background-task function belongs to, for the ``.plugin`` field on
+-    :class:`BackgroundTask` (used by ``/-/tasks`` and logs).
+-
+-    This matches ``func``'s module against every currently-registered
+-    pluggy plugin's module - the same module a plugin's ``startup`` hook
+-    implementation lives in, in the overwhelmingly common case where
+-    ``add_background_task`` is called directly from (or a couple of
+-    frames below) that hook. It deliberately does *not* walk the call
+-    stack or otherwise try harder: this is a nice-to-have for
+-    introspection, not something worth building heavy machinery for, and
+-    returning ``None`` when it can't tell is a fine fallback.
+-    """
+-    try:
+-        from .plugins import pm
+-
+-        module = inspect.getmodule(func)
+-        if module is None:
+-            return None
+-        module_name = getattr(module, "__name__", None)
+-        if not module_name:
+-            return None
+-        for plugin in pm.get_plugins():
+-            plugin_module = (
+-                plugin if inspect.ismodule(plugin) else inspect.getmodule(plugin)
+-            )
+-            if plugin_module is None:
+-                continue
+-            plugin_module_name = getattr(plugin_module, "__name__", None)
+-            if not plugin_module_name:
+-                continue
+-            if module_name == plugin_module_name or module_name.startswith(
+-                plugin_module_name + "."
+-            ):
+-                return pm.get_name(plugin)
+-    except Exception:  # noqa: BLE001
+-        # Never let plugin-name resolution break task registration.
+-        return None
+-    return None
++def _function_path(func: Callable) -> str:
++    """Describe the callable without guessing which plugin registered it."""
++    while isinstance(func, functools.partial):
++        func = func.func
++    if not hasattr(func, "__qualname__"):
++        func = type(func).__call__
++    return f"{func.__module__}.{func.__qualname__}"
+ 
+ 
+ class BackgroundTask:
+@@ -96,14 +62,13 @@ class BackgroundTask:
+         self,
+         name: str,
+         func: Callable[[object], Awaitable[None]],
+-        plugin: str | None = None,
+     ):
+         self.name = name
+         self.state = "registered"
+         self.task: asyncio.Task | None = None
+         self.exception: BaseException | None = None
+         self.started_at: str | None = None
+-        self.plugin = plugin
++        self.function = _function_path(func)
+         self._func = func
+         self._supervisor: BackgroundTaskSupervisor | None = None
+ 
+@@ -160,8 +125,7 @@ class BackgroundTaskSupervisor:
+     def add(self, func, name=None) -> BackgroundTask:
+         base_name = name or getattr(func, "__qualname__", None) or repr(func)
+         actual_name = self._unique_name(base_name)
+-        plugin = _resolve_plugin_name(func)
+-        handle = BackgroundTask(actual_name, func, plugin=plugin)
++        handle = BackgroundTask(actual_name, func)
+         handle._supervisor = self
+         self._tasks.append(handle)
+         self._names.add(actual_name)
+@@ -233,6 +197,13 @@ class BackgroundTaskSupervisor:
+                 ", ".join(names),
+             )
+ 
++    @property
++    def launched(self) -> bool:
++        """Whether :meth:`launch_all` has run. Lets ``/-/tasks`` tell "no
++        tasks registered" apart from "tasks registered but not launched yet".
++        """
++        return self._launched
++
+     def tasks(self) -> list[BackgroundTask]:
+         """Return every registered :class:`BackgroundTask`, launched or
+         not, in registration order. Used by the ``/-/tasks`` debug
+diff --git a/docs/internals.rst b/docs/internals.rst
+index 4b646449..c173cb62 100644
+--- a/docs/internals.rst
++++ b/docs/internals.rst
+@@ -1515,8 +1515,8 @@ BackgroundTask objects
+ ``.started_at`` - string or ``None``
+     ISO 8601 UTC timestamp of when the task was launched.
+ 
+-``.plugin`` - string or ``None``
+-    Best-effort name of the plugin that registered the task, resolved from the module ``func`` was defined in. Used in log messages; ``None`` if it cannot be determined.
++``.function`` - string
++    Dotted path of the task's callable, for example ``my_plugin.MyClass.run``. ``functools.partial`` wrappers are unwrapped, and callable instances are described as ``module.Class.__call__``.
+ 
+ ``.cancel()``
+     Cancel the task. If it has already launched, this cancels the underlying ``asyncio.Task`` — ``.state`` becomes ``cancelled`` once the cancellation is observed. If it has not launched yet, it is removed from the queue so it never runs.
+diff --git a/docs/introspection.rst b/docs/introspection.rst
+index 14b6249f..cc496bb7 100644
+--- a/docs/introspection.rst
++++ b/docs/introspection.rst
+@@ -278,6 +278,29 @@ Shows details of threads and ``asyncio`` tasks. This endpoint requires the ``per
+         ]
+     }
+ 
++.. _JsonDataView_tasks:
++
++/-/tasks
++--------
++
++Shows every background task registered with ``datasette.add_background_task()``: its name, state, function, start time and exception (if it crashed). ``launched`` is ``false`` while tasks are registered but have not been started yet. This endpoint requires the ``permissions-debug`` permission.
++
++.. code-block:: json
++
++    {
++        "ok": true,
++        "tasks": [
++            {
++                "name": "poll_queue",
++                "state": "running",
++                "function": "my_plugin.poll_queue",
++                "started_at": "2026-10-16T12:00:00.000000+00:00",
++                "exception": null
++            }
++        ],
++        "launched": true
++    }
++
+ .. _JsonDataView_actor:
+ 
+ /-/actor

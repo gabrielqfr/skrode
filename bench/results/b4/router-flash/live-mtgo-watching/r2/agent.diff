@@ -1,0 +1,103 @@
+diff --git a/src/sensei_top/api/models/common.py b/src/sensei_top/api/models/common.py
+index 56e0822..4e79d2f 100644
+--- a/src/sensei_top/api/models/common.py
++++ b/src/sensei_top/api/models/common.py
+@@ -31,16 +31,16 @@ class LiveStatus(BaseModel):
+     its own OS process now, not this one (``live.py``'s ``WatcherProcess`` —
+     a rebuild sharing this process's GIL taxed every request ~5x), so
+     nothing here can be read from in-memory watcher state. Only
+-    ``watching`` itself is still asked of the watcher object directly
+-    (``is_alive()`` on the child process), since that one bit doesn't need
+-    shared memory to answer.
++    ``watching`` and ``mtgo_watching`` are still asked of the watcher object
++    directly (``is_alive()``, and the MTGO directory it was started with),
++    since those bits don't need shared memory to answer.
+     """
+ 
+     watching: bool = Field(description="a watcher is running and reachable from this server")
+-    mtgo_read_at_startup: bool = Field(
++    mtgo_watching: bool = Field(
+         False,
+-        description="the running watcher found an MTGO game-log directory and read it once "
+-        "at its own startup — MTGO's game logs are never polled during a live session",
++        description="the running watcher has an MTGO game-log directory and stores each game "
++        "from it once the game ends",
+     )
+     last_ingest_at: str | None = Field(
+         None,
+diff --git a/src/sensei_top/api/routes/meta.py b/src/sensei_top/api/routes/meta.py
+index ff2f227..e4d0f7c 100644
+--- a/src/sensei_top/api/routes/meta.py
++++ b/src/sensei_top/api/routes/meta.py
+@@ -110,7 +110,7 @@ def live(request: Request, conn: Conn) -> LiveStatus:
+     projections = projection_row[1] if projection_row else 0
+     return LiveStatus(
+         watching=bool(watcher and watcher.is_alive()),
+-        mtgo_read_at_startup=bool(getattr(watcher, "mtgo_dir", None)),
++        mtgo_watching=bool(getattr(watcher, "mtgo_dir", None)),
+         last_ingest_at=last_ingest,
+         last_checked_at=last_checked,
+         last_event_at=last_event,
+diff --git a/web/src/components/settings/SourcesSection.tsx b/web/src/components/settings/SourcesSection.tsx
+index 2044484..3bd4765 100644
+--- a/web/src/components/settings/SourcesSection.tsx
++++ b/web/src/components/settings/SourcesSection.tsx
+@@ -104,7 +104,7 @@ function MagicOnlineCard({
+           hint={
+             sources.mtgoDir === null
+               ? 'Nothing is read from Magic Online until a folder is set.'
+-              : 'Read once, when the app starts.'
++              : 'Each game is read once it ends.'
+           }
+           error={text.errorOf('mtgoDir')}
+         />
+diff --git a/web/src/shell/LiveStatus.tsx b/web/src/shell/LiveStatus.tsx
+index f96674c..ff7a831 100644
+--- a/web/src/shell/LiveStatus.tsx
++++ b/web/src/shell/LiveStatus.tsx
+@@ -123,11 +123,8 @@ export function LiveStatus({ className = '' }: { className?: string }) {
+                 </p>
+               )}
+               <p>{changed ? `Data last changed ${changed}.` : 'No data yet.'}</p>
+-              {watching && live.data?.mtgo_read_at_startup && (
+-                <p>
+-                  MTGO matches were read when the tracker started. One played since then appears after the
+-                  tracker is restarted.
+-                </p>
++              {watching && live.data?.mtgo_watching && (
++                <p>MTGO is watched too: each game appears once it ends.</p>
+               )}
+             </>
+           )}
+diff --git a/web/src/types/api.ts b/web/src/types/api.ts
+index f7aaf7b..f7e6ce7 100644
+--- a/web/src/types/api.ts
++++ b/web/src/types/api.ts
+@@ -2818,9 +2818,9 @@ export interface components {
+          *     its own OS process now, not this one (``live.py``'s ``WatcherProcess`` —
+          *     a rebuild sharing this process's GIL taxed every request ~5x), so
+          *     nothing here can be read from in-memory watcher state. Only
+-         *     ``watching`` itself is still asked of the watcher object directly
+-         *     (``is_alive()`` on the child process), since that one bit doesn't need
+-         *     shared memory to answer.
++         *     ``watching`` and ``mtgo_watching`` are still asked of the watcher object
++         *     directly (``is_alive()``, and the MTGO directory it was started with),
++         *     since those bits don't need shared memory to answer.
+          */
+         LiveStatus: {
+             /**
+@@ -2829,11 +2829,11 @@ export interface components {
+              */
+             watching: boolean;
+             /**
+-             * Mtgo Read At Startup
+-             * @description the running watcher found an MTGO game-log directory and read it once at its own startup — MTGO's game logs are never polled during a live session
++             * Mtgo Watching
++             * @description the running watcher has an MTGO game-log directory and stores each game from it once the game ends
+              * @default false
+              */
+-            mtgo_read_at_startup: boolean;
++            mtgo_watching: boolean;
+             /**
+              * Last Ingest At
+              * @description when new events last landed — not when the reader last looked

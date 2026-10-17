@@ -5,22 +5,23 @@ well-specified coding task to a local model. Its tool runs a small agent loop (f
 write, edit, bash, grep) against llama-server on `127.0.0.1`, inside a git worktree on its own
 branch. It then runs the task's acceptance commands, retries with the failure output, and returns
 a short record (`passed`, `failed` or `escalate`, under about 1.5k tokens). Claude reads the branch
-only when it decides to review it. The point is to spend less Claude quota on mechanical work
-without lowering quality, and to show that with a public benchmark.
+only when it decides to review it. The point was to spend less Claude quota on mechanical work
+without lowering quality. The benchmark (`docs/benchmark.md`) showed it does not, so the project
+is concluded and kept as a record that others can read and rerun.
 
 ## Repo map
 
 | Path | What it is |
 | --- | --- |
-| `skrode/` | The package. The job: `worker.py` (the agent loop over `llm.py` and the five `tools.py`, shaped by `profiles.py`), `worktree.py`, `acceptance.py`, `jobs.py` (`run_job`). Serving it: `server.py` (MCP tools), `manager.py` (jobs at once), `stats.py`, `config.py` (the user's per-repo setup), `cli.py`. The bench: `benchtask.py` (task folder to arguments), `benchprep.py` (a clone, base commit and config per task), `benchrun.py` (one row over the tasks, graded the same way), `benchsummary.py` (runs and rows: Claude usage, jobs, worker dollars, GPU energy) |
+| `skrode/` | The package. The job: `worker.py` (the agent loop over `llm.py` and the five `tools.py`, shaped by `profiles.py`), `worktree.py`, `acceptance.py`, `jobs.py` (`run_job`). Serving it: `server.py` (MCP tools), `manager.py` (jobs at once), `stats.py`, `config.py` (the user's per-repo setup), `cli.py`. The bench: `benchtask.py` (task folder to arguments), `benchprep.py` (a clone, base commit, hidden tests and config per task), `benchrun.py` (one row over the tasks, graded the same way), `benchsummary.py` (runs and rows: Claude usage, jobs, worker dollars, GPU energy) |
 | `tests/` | pytest. Tests never need a model server or the network: fake the HTTP endpoint |
 | `scripts/verify.sh` | The checks every change must pass, with bounded output |
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
 | `implementer/opencode/` | That implementer's opencode config and rules, loaded through `XDG_CONFIG_HOME` so no global opencode config applies |
-| `bench/` | The bench's tracked helpers: `opencode/` (the opencode row's config and rules) and `sampler.py` (GPU watts, one JSON line per reading) |
+| `bench/` | The bench: `tasks/` (28 tasks, upstream tests fetched, never stored), `results/` (the raw files the published tables come from), `forwarder.py` (the DeepSeek row's pass-through), `gpu-batch.sh`, `sampler.py` (GPU watts), `opencode/` (the opencode row's config and rules) |
 | `schemas/` | JSON Schemas: `run_local_subagent` arguments, the job record, the worker's five tools and its report, model profiles. `examples/` holds records the tests validate |
 | `prompts/worker.md` | Every message sent to the local model, one `## <name>` section each. Load it as written; never reword it in code |
-| `docs/escalation.md` | When a job ends `passed`, `escalate` or `failed`, and each reason's trigger |
+| `docs/` | `benchmark.md` (results, method, rerun steps); `escalation.md` (when a job ends `passed`, `escalate` or `failed`) |
 | `profiles/` | One YAML per served model alias, checked against `schemas/profile.json` |
 
 ## Non-negotiables
@@ -56,8 +57,8 @@ check to make it pass.
 
 ## Commits
 
-Conventional messages, `<type>(<scope>): <what>`, signed off for the DCO (`git commit -s`). The GitHub
-repo is private; nothing goes public until the project's name is final. Implementers do not commit.
+Conventional messages, `<type>(<scope>): <what>`, signed off for the DCO (`git commit -s`).
+Implementers do not commit.
 
 ## Privacy
 

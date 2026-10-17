@@ -1,0 +1,42 @@
+diff --git a/web/src/bridge.ts b/web/src/bridge.ts
+index 922924d..fe776e6 100644
+--- a/web/src/bridge.ts
++++ b/web/src/bridge.ts
+@@ -176,11 +176,12 @@ export function shellFrom(raw: RawShell, settings: BridgeSettings): Shell {
+ 
+ /** One shell's settings held for `useSyncExternalStore`: `null` until the
+  *  shell has settings (its `initial` was `null`), then the `Shell`, which
+- *  changes identity only when a change event arrives. It listens to the
+- *  shell from the moment it is made and never stops, so an event published
+- *  while no page is listening (a backup that ends after the person left
+- *  Settings) is in the next snapshot. `subscribe` manages React's
+- *  listeners alone. */
++ *  changes identity only when a change event arrives. The dashboard makes
++ *  its store at start (`startShellStore`), not at the first `useShell()`,
++ *  and it listens to the shell from the moment it is made and never stops,
++ *  so an event published while no page is listening (a backup that ends
++ *  after the person left Settings) is in the next snapshot. `subscribe`
++ *  manages React's listeners alone. */
+ export function shellStore(raw: RawShell | undefined): {
+   subscribe(listener: () => void): () => void
+   snapshot(): Shell | null
+@@ -214,8 +215,18 @@ function storeOfGlobal() {
+   return held.store
+ }
+ 
++/** Makes the dashboard's store now, so it hears change events from app
++ *  start, not from the first page that reads the shell. */
++export function startShellStore(): ReturnType<typeof shellStore> {
++  return storeOfGlobal()
++}
++
++startShellStore()
++
+ /** The shell the dashboard runs in, kept current by its change events. A
+- *  browser has none, and gets `null`, as does a shell with no settings yet. */
++ *  browser has none, and gets `null`, as does a shell with no settings yet.
++ *  The store is made at start (`startShellStore`), not by the first
++ *  `useShell()`. */
+ export function useShell(): Shell | null {
+   const store = storeOfGlobal()
+   return useSyncExternalStore(store.subscribe, store.snapshot)

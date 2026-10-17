@@ -1,0 +1,18 @@
+........................................................................ [ 39%]
+........................................................................ [ 78%]
+.......................................                                  [100%]
+183 passed in 19.49s
+All checks passed!
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.2 <bench-repos>/wt/claude-sonnet-decks-first-played-r1/web[39m
+
+ [32m✓[39m src/lib/deckOverview.test.ts [2m([22m[2m32 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m32 passed[39m[22m[90m (32)[39m
+[2m   Start at [22m 16:45:58
+[2m   Duration [22m 172ms[2m (transform 54%, import 34%, tests 9%, worker 3%)[22m
+
+$ oxlint
+Found 0 warnings and 0 errors.
+Finished in 31ms on 199 files with 104 rules using 16 threads.

@@ -1,0 +1,239 @@
+diff --git a/docs/changelog.md b/docs/changelog.md
+index c4143fe..4b07297 100644
+--- a/docs/changelog.md
++++ b/docs/changelog.md
+@@ -5,6 +5,7 @@
+ 
+ - Reasoning-capable Responses API models now support a `reasoning_summary` option with `auto`, `concise`, and `detailed` values. This can be used with {ref}`llm openai endpoint --responses <openai-endpoint>`. [#1600](https://github.com/simonw/llm/issues/1600)
+ - `llm prompt -t/--template` can now be repeated to combine templates in order. This allows model configuration and options from one template to be used with a prompt from another.
++- `llm logs` now includes the output of server-side tool calls in a **Tool results** section within the response, also in `llm logs --json` and `--short`, with a new `server_executed` key distinguishing them from locally executed results ([#1629](https://github.com/simonw/llm/issues/1629)).
+ 
+ (v0_32)=
+ ## 0.32 (2026-08-04)
+diff --git a/llm/cli.py b/llm/cli.py
+index 8de14c2..0f3b26e 100644
+--- a/llm/cli.py
++++ b/llm/cli.py
+@@ -1709,6 +1709,7 @@ def annotate_log_rows(db, rows, expand=False, truncate=False):
+             "_output_parts",
+             "_parent_message_hash",
+             "_input_message_hashes",
++            "_output_message_hashes",
+             "_tip_message_hash",
+             "_legacy",
+             "_search_rank",
+@@ -2100,6 +2101,36 @@ def logs_list(
+                 content = "\n".join(bits)
+             click.echo(f"\n### {title}\n\n{content}")
+ 
++        def _display_tool_results(tool_results):
++            for tool_result in tool_results:
++                attachments = ""
++                for attachment in tool_result["attachments"]:
++                    desc = ""
++                    if attachment.get("type"):
++                        desc += attachment["type"] + ": "
++                    if attachment.get("path"):
++                        desc += attachment["path"]
++                    elif attachment.get("url"):
++                        desc += attachment["url"]
++                    elif attachment.get("content"):
++                        desc += f"<{attachment['content_length']:,} bytes>"
++                    attachments += f"\n    - {desc}"
++                click.echo(
++                    "- **{}**: `{}`  \n{}{}{}".format(
++                        tool_result["name"],
++                        tool_result["tool_call_id"],
++                        _fenced_block(tool_result["output"]),
++                        (
++                            "  \n    **Error**: {}\n".format(
++                                tool_result["exception"]
++                            )
++                            if tool_result["exception"]
++                            else ""
++                        ),
++                        attachments,
++                    )
++                )
++
+         current_system = None
+         should_show_conversation = True
+         seen_tool_hashes = set()
+@@ -2251,36 +2282,19 @@ def logs_list(
+                     )
+                     for tool in instance_tools:
+                         echo_tool(tool, "    ")
+-            if row["tool_results"]:
++            local_tool_results = [
++                tool_result
++                for tool_result in row["tool_results"]
++                if not tool_result.get("server_executed")
++            ]
++            server_tool_results = [
++                tool_result
++                for tool_result in row["tool_results"]
++                if tool_result.get("server_executed")
++            ]
++            if local_tool_results:
+                 click.echo("\n### Tool results\n")
+-                for tool_result in row["tool_results"]:
+-                    attachments = ""
+-                    for attachment in tool_result["attachments"]:
+-                        desc = ""
+-                        if attachment.get("type"):
+-                            desc += attachment["type"] + ": "
+-                        if attachment.get("path"):
+-                            desc += attachment["path"]
+-                        elif attachment.get("url"):
+-                            desc += attachment["url"]
+-                        elif attachment.get("content"):
+-                            desc += f"<{attachment['content_length']:,} bytes>"
+-                        attachments += f"\n    - {desc}"
+-                    click.echo(
+-                        "- **{}**: `{}`  \n{}{}{}".format(
+-                            tool_result["name"],
+-                            tool_result["tool_call_id"],
+-                            _fenced_block(tool_result["output"]),
+-                            (
+-                                "  \n    **Error**: {}\n".format(
+-                                    tool_result["exception"]
+-                                )
+-                                if tool_result["exception"]
+-                                else ""
+-                            ),
+-                            attachments,
+-                        )
+-                    )
++                _display_tool_results(local_tool_results)
+             attachments = attachments_by_id.get(row["id"])
+             if attachments:
+                 click.echo("\n### Attachments\n")
+@@ -2327,6 +2341,10 @@ def logs_list(
+                         )
+                     )
+                 click.echo("")
++            if server_tool_results:
++                click.echo("### Tool results\n")
++                _display_tool_results(server_tool_results)
++                click.echo("")
+             if response:
+                 click.echo(f"{response}\n")
+             if usage:
+diff --git a/llm/logs.py b/llm/logs.py
+index 159ad29..04d031d 100644
+--- a/llm/logs.py
++++ b/llm/logs.py
+@@ -1232,6 +1232,9 @@ class _LogRowBuilder:
+                 "_input_message_hashes": self._input_segment_hashes(
+                     row["parent_message_hash"]
+                 ),
++                "_output_message_hashes": self._output_segment_hashes(
++                    row["tip_message_hash"], row["parent_message_hash"]
++                ),
+                 "_tip_message_hash": row["tip_message_hash"],
+             }
+         )
+@@ -1276,6 +1279,30 @@ class _LogRowBuilder:
+         hashes.reverse()
+         return hashes
+ 
++    def _output_segment_hashes(
++        self, tip_hash: str | None, parent_hash: str | None
++    ) -> list[str]:
++        """Hashes of the turn's own output messages, walked back from the
++        tip until the parent message (or a missing hash) stops the walk."""
++        hashes: list[str] = []
++        hash_ = tip_hash
++        while hash_ and hash_ != parent_hash:
++            message_row = next(
++                iter(
++                    self.store.db.query(
++                        "select parent_hash from messages where hash = ?",
++                        [hash_],
++                    )
++                ),
++                None,
++            )
++            if message_row is None:
++                break
++            hashes.append(hash_)
++            hash_ = message_row["parent_hash"]
++        hashes.reverse()
++        return hashes
++
+ 
+ def log_rows(
+     store: "LogStore",
+@@ -1402,8 +1429,17 @@ def log_row_extras(store: "LogStore", row: dict) -> dict:
+     # parts.id and tools.id stand in for the row ids the old
+     # tool_calls / tool_results tables exposed, so the JSON shape of
+     # `llm logs` is unchanged.
+-    call_ids = _part_ids(store, [row.get("_tip_message_hash")], "tool_call")
++    call_ids = _part_ids(
++        store,
++        row.get("_output_message_hashes") or [row.get("_tip_message_hash")],
++        "tool_call",
++    )
+     result_ids = _part_ids(store, row.get("_input_message_hashes") or [], "tool_result")
++    server_result_ids = _part_ids(
++        store,
++        row.get("_output_message_hashes") or [row.get("_tip_message_hash")],
++        "tool_result",
++    )
+ 
+     # input_schema is rendered as a dict, so decode it here rather than
+     # handing the caller the raw JSON text out of the column.
+@@ -1448,6 +1484,7 @@ def log_row_extras(store: "LogStore", row: dict) -> dict:
+             "name": part.name,
+             "arguments": part.arguments,
+             "tool_call_id": part.tool_call_id,
++            "server_executed": part.server_executed,
+         }
+         for part in row.get("_output_parts", [])
+         if isinstance(part, ToolCallPart)
+@@ -1455,10 +1492,19 @@ def log_row_extras(store: "LogStore", row: dict) -> dict:
+     result_parts = [
+         part for part in row.get("_input_parts", []) if isinstance(part, ToolResultPart)
+     ]
++    server_result_parts = [
++        part
++        for part in row.get("_output_parts", [])
++        if isinstance(part, ToolResultPart)
++    ]
+     instances = _instances_by_tool_call_id(
+         store,
+         row["id"],
+-        [part.tool_call_id for part in result_parts if part.tool_call_id],
++        [
++            part.tool_call_id
++            for part in result_parts + server_result_parts
++            if part.tool_call_id
++        ],
+     )
+     tool_results = [
+         {
+@@ -1468,10 +1514,24 @@ def log_row_extras(store: "LogStore", row: dict) -> dict:
+             "output": part.output,
+             "tool_call_id": part.tool_call_id,
+             "exception": part.exception,
++            "server_executed": False,
+             "instance": instances.get(part.tool_call_id),
+             "attachments": [_attachment_summary(a) for a in part.attachments],
+         }
+         for part in result_parts
++    ] + [
++        {
++            "id": server_result_ids.get(part.tool_call_id),
++            "tool_id": tool_ids.get(part.name),
++            "name": part.name,
++            "output": part.output,
++            "tool_call_id": part.tool_call_id,
++            "exception": part.exception,
++            "server_executed": True,
++            "instance": instances.get(part.tool_call_id),
++            "attachments": [_attachment_summary(a) for a in part.attachments],
++        }
++        for part in server_result_parts
+     ]
+ 
+     fragments: dict[str, list[dict]] = {

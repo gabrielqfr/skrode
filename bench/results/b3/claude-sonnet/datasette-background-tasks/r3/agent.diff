@@ -1,0 +1,230 @@
+diff --git a/datasette/__init__.py b/datasette/__init__.py
+index e0022178..982dcc79 100644
+--- a/datasette/__init__.py
++++ b/datasette/__init__.py
+@@ -1,6 +1,7 @@
+ from datasette.permissions import Permission  # noqa
+ from datasette.version import __version_info__, __version__  # noqa
+ from datasette.events import Event  # noqa
++from datasette.background_tasks import BackgroundTask, BackgroundTaskSupervisor  # noqa
+ from datasette.tokens import TokenHandler, TokenInvalid, TokenRestrictions  # noqa
+ from datasette.utils.asgi import (  # noqa
+     Forbidden,
+diff --git a/datasette/app.py b/datasette/app.py
+index 93cd6933..b80dc07c 100644
+--- a/datasette/app.py
++++ b/datasette/app.py
+@@ -45,6 +45,7 @@ from . import stored_queries, write_sql
+ from .column_types import SQLiteType
+ from .csrf import CrossOriginProtectionMiddleware
+ from .database import Database, QueryInterrupted
++from .background_tasks import BackgroundTask, BackgroundTaskSupervisor  # noqa
+ from .events import Event
+ from .plugins import DEFAULT_PLUGINS, get_plugins, pm
+ from .renderer import json_renderer
+@@ -455,6 +456,7 @@ class Datasette:
+         self.actions = {}  # .invoke_startup() will populate this
+         self._column_types = {}  # .invoke_startup() will populate this
+         self._setup_db_done = False
++        self._suppress_background_tasks = False
+         try:
+             self._refresh_schemas_lock = asyncio.Lock()
+             self._startup_lock = asyncio.Lock()
+@@ -468,6 +470,7 @@ class Datasette:
+                 self._startup_lock = asyncio.Lock()
+             else:
+                 raise
++        self._background_tasks = BackgroundTaskSupervisor(self)
+         self.crossdb = crossdb
+         self.nolock = nolock
+         if memory or crossdb or not self.files:
+@@ -3021,6 +3024,25 @@ ORDER BY allowed.parent, allowed.child
+                 self._setup_db_done = True
+             await self.invoke_startup()
+ 
++    def add_background_task(self, func, name=None):
++        """
++        Register a supervised background task. Works any time after
++        __init__; ``func`` is a coroutine function called as ``func(datasette)``.
++        Tasks are launched once all startup hooks have finished (or at once if
++        that has already happened). Returns a BackgroundTask handle.
++        """
++        return self._background_tasks.add(func, name=name)
++
++    async def start_background_tasks(self):
++        "Run startup hooks, then launch all registered background tasks"
++        await self.invoke_startup()
++        await self._background_tasks.launch_all()
++
++    async def _launch_background_tasks(self):
++        if self._suppress_background_tasks:
++            return
++        await self._background_tasks.launch_all()
++
+     def app(self):
+         """Returns an ASGI app function that serves the whole of Datasette"""
+         routes = self._routes()
+@@ -3033,10 +3055,12 @@ ORDER BY allowed.parent, allowed.child
+             asgi = AsgiTracer(asgi)
+         asgi = AsgiLifespan(
+             asgi,
+-            on_startup=[self._startup_sequence],
++            on_startup=[self._startup_sequence, self._launch_background_tasks],
+             on_shutdown=[_close_on_shutdown],
+         )
+-        asgi = AsgiRunOnFirstRequest(asgi, on_startup=[self._startup_sequence])
++        asgi = AsgiRunOnFirstRequest(
++            asgi, on_startup=[self._startup_sequence, self._launch_background_tasks]
++        )
+         for wrapper in pm.hook.asgi_wrapper(datasette=self):
+             asgi = wrapper(asgi)
+         return asgi
+diff --git a/datasette/background_tasks.py b/datasette/background_tasks.py
+new file mode 100644
+index 00000000..471dea61
+--- /dev/null
++++ b/datasette/background_tasks.py
+@@ -0,0 +1,127 @@
++import asyncio
++import datetime
++import logging
++
++logger = logging.getLogger("datasette.background_tasks")
++
++
++class BackgroundTask:
++    "Handle for a supervised background task"
++
++    def __init__(self, name, func, plugin=None):
++        self.name = name
++        self.state = "registered"
++        self.task = None
++        self.exception = None
++        self.started_at = None
++        self.plugin = plugin
++        self._func = func
++        self._supervisor = None
++
++    def cancel(self):
++        if self.task is not None:
++            self.task.cancel()
++        elif self._supervisor is not None:
++            self._supervisor._remove(self)
++
++    def __repr__(self):
++        return f"<BackgroundTask name={self.name!r} state={self.state!r}>"
++
++
++class BackgroundTaskSupervisor:
++    def __init__(self, datasette):
++        self.datasette = datasette
++        self._handles = []
++        self._names = set()
++        self._launched = False
++        self._lock = asyncio.Lock()
++
++    def add(self, func, name=None):
++        base = name or getattr(func, "__qualname__", None) or repr(func)
++        unique = base
++        counter = 2
++        while unique in self._names:
++            unique = f"{base}-{counter}"
++            counter += 1
++        handle = BackgroundTask(unique, func, plugin=self._plugin_for(func))
++        handle._supervisor = self
++        self._handles.append(handle)
++        self._names.add(unique)
++        if self._launched:
++            self._launch(handle)
++        return handle
++
++    def _plugin_for(self, func):
++        try:
++            from datasette.plugins import pm
++
++            module = getattr(func, "__module__", None)
++            if not module:
++                return None
++            for plugin_name, plugin in pm.list_name_plugin():
++                plugin_module = getattr(plugin, "__name__", None)
++                if not plugin_module:
++                    continue
++                if module == plugin_module or module.startswith(plugin_module + "."):
++                    return plugin_name
++        except Exception:
++            return None
++        return None
++
++    def _remove(self, handle):
++        if handle in self._handles:
++            self._handles.remove(handle)
++        self._names.discard(handle.name)
++
++    def _launch(self, handle):
++        handle.state = "running"
++        handle.started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
++        handle.task = asyncio.create_task(
++            handle._func(self.datasette), name=handle.name
++        )
++
++        def done(task):
++            if task.cancelled():
++                handle.state = "cancelled"
++                return
++            exc = task.exception()
++            if exc is not None:
++                handle.state = "crashed"
++                handle.exception = exc
++                logger.error("Background task %r crashed", handle.name, exc_info=exc)
++            else:
++                handle.state = "completed"
++
++        handle.task.add_done_callback(done)
++
++    async def launch_all(self):
++        if self._launched:
++            return
++        async with self._lock:
++            if self._launched:
++                return
++            self._launched = True
++            for handle in list(self._handles):
++                if handle.task is None:
++                    self._launch(handle)
++
++    async def cancel_all(self, grace: float = 5.0):
++        pending = [
++            h.task for h in self._handles if h.task is not None and not h.task.done()
++        ]
++        if not pending:
++            return
++        for task in pending:
++            task.cancel()
++        await asyncio.wait(pending, timeout=grace)
++        still = sorted(t.get_name() for t in pending if not t.done())
++        if still:
++            logger.warning(
++                "%d background task(s) still running after %s seconds grace period: %s",
++                len(still),
++                grace,
++                ", ".join(still),
++            )
++
++    def tasks(self):
++        return list(self._handles)
+diff --git a/datasette/cli.py b/datasette/cli.py
+index 2694c1f6..7ebe63b8 100644
+--- a/datasette/cli.py
++++ b/datasette/cli.py
+@@ -678,6 +678,11 @@ def serve(
+         except StartupError as e:
+             raise click.ClickException(e.args[0])
+ 
++        # The TestClient request goes through the whole ASGI stack, including
++        # the first-request startup fallback, which would otherwise launch
++        # the registered background tasks.
++        ds._suppress_background_tasks = True
++
+         client = TestClient(ds)
+         request_headers = {}
+         if token:

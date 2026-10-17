@@ -1,0 +1,439 @@
+diff --git a/llm/default_plugins/openai_models.py b/llm/default_plugins/openai_models.py
+index df4ebf6..e6dfb77 100644
+--- a/llm/default_plugins/openai_models.py
++++ b/llm/default_plugins/openai_models.py
+@@ -1719,6 +1719,40 @@ class _SharedResponses(_Shared):
+                     bits.append(text)
+         return "".join(bits)
+ 
++    def _reasoning_refresh_events(
++        self, response_json, done_events
++    ) -> list[StreamEvent]:
++        """Re-emit reasoning metadata from the final payload.
++
++        OpenAI encrypts reasoning per event, so the ``encrypted_content``
++        in ``response.completed`` can differ from the one seen at
++        ``response.output_item.done``. Yielding a second metadata-only
++        event for the same part makes the stored ReasoningPart agree with
++        the payload. The framework merges it onto the existing part.
++        """
++        events: list[StreamEvent] = []
++        for item in response_json.get("output") or []:
++            if not isinstance(item, dict) or item.get("type") != "reasoning":
++                continue
++            prior = done_events.get(item.get("id"))
++            if prior is None or prior.part_index is None:
++                continue
++            meta: dict[str, Any] = {
++                key: item[key]
++                for key in ("id", "encrypted_content", "summary")
++                if item.get(key)
++            }
++            if meta:
++                events.append(
++                    StreamEvent(
++                        type="reasoning",
++                        chunk="",
++                        part_index=prior.part_index,
++                        provider_metadata={"openai": meta},
++                    )
++                )
++        return events
++
+     def _reasoning_event(self, item, *, include_text=True):
+         """Build a redacted-reasoning StreamEvent that carries the opaque
+         ``id`` and ``encrypted_content`` from a Responses-API reasoning
+@@ -1855,6 +1889,7 @@ class Responses(_SharedResponses, KeyModel):
+             tool_call_meta: dict[str, dict[str, str]] = {}
+             final_response_dict: dict[str, Any] | None = None
+             reasoning_items_with_streamed_text = set()
++            reasoning_done_events: dict[str, StreamEvent] = {}
+             for event in stream_obj:
+                 etype = getattr(event, "type", None)
+                 if etype == "response.output_item.added":
+@@ -1905,12 +1940,15 @@ class Responses(_SharedResponses, KeyModel):
+                     if item.type == "reasoning":
+                         had_reasoning = True
+                         item_id = getattr(item, "id", None)
+-                        yield self._reasoning_event(
++                        reasoning_event = self._reasoning_event(
+                             item,
+                             include_text=(
+                                 item_id not in reasoning_items_with_streamed_text
+                             ),
+                         )
++                        if item_id:
++                            reasoning_done_events[item_id] = reasoning_event
++                        yield reasoning_event
+                     elif item.type == "function_call":
+                         try:
+                             args = json.loads(item.arguments) if item.arguments else {}
+@@ -1929,6 +1967,9 @@ class Responses(_SharedResponses, KeyModel):
+                         usage = final_response_dict["usage"]
+             if final_response_dict is not None:
+                 response.response_json = remove_dict_none_values(final_response_dict)
++                yield from self._reasoning_refresh_events(
++                    response.response_json, reasoning_done_events
++                )
+         else:
+             completion = client.responses.create(
+                 model=self.model_name or self.model_id,
+@@ -2089,6 +2130,7 @@ class AsyncResponses(_SharedResponses, AsyncKeyModel):
+             tool_call_meta: dict[str, dict[str, str]] = {}
+             final_response_dict: dict[str, Any] | None = None
+             reasoning_items_with_streamed_text = set()
++            reasoning_done_events: dict[str, StreamEvent] = {}
+             async for event in stream_obj:
+                 etype = getattr(event, "type", None)
+                 if etype == "response.output_item.added":
+@@ -2139,12 +2181,15 @@ class AsyncResponses(_SharedResponses, AsyncKeyModel):
+                     if item.type == "reasoning":
+                         had_reasoning = True
+                         item_id = getattr(item, "id", None)
+-                        yield self._reasoning_event(
++                        reasoning_event = self._reasoning_event(
+                             item,
+                             include_text=(
+                                 item_id not in reasoning_items_with_streamed_text
+                             ),
+                         )
++                        if item_id:
++                            reasoning_done_events[item_id] = reasoning_event
++                        yield reasoning_event
+                     elif item.type == "function_call":
+                         try:
+                             args = json.loads(item.arguments) if item.arguments else {}
+@@ -2163,6 +2208,10 @@ class AsyncResponses(_SharedResponses, AsyncKeyModel):
+                         usage = final_response_dict["usage"]
+             if final_response_dict is not None:
+                 response.response_json = remove_dict_none_values(final_response_dict)
++                for refresh_event in self._reasoning_refresh_events(
++                    response.response_json, reasoning_done_events
++                ):
++                    yield refresh_event
+         else:
+             completion = await client.responses.create(
+                 model=self.model_name or self.model_id,
+diff --git a/llm/logs.py b/llm/logs.py
+index 65592e7..d229129 100644
+--- a/llm/logs.py
++++ b/llm/logs.py
+@@ -21,6 +21,8 @@ import hashlib
+ import json
+ from typing import Any
+ 
++from condense_json import UncondenseError, condense_json, uncondense_json
++
+ from .migrations import migrate
+ from .models import Attachment, _conversation_name
+ from .parts import (
+@@ -458,6 +460,47 @@ class LogStore:
+         with self.db.atomic():
+             return self._log_in_transaction(response, thread_id)
+ 
++    def turn_response_json(self, turn_id: str) -> Any:
++        """The turn's raw provider payload, resolved back from its condensed
++        form. None for an unknown turn or one with no stored payload.
++
++        Raises ``UncondenseError`` when a reference no longer resolves.
++        """
++        row = next(
++            iter(
++                self.db.query(
++                    """
++                    select turns.model, turns.parent_message_hash,
++                           turns.tip_message_hash, turns.response_json,
++                           schemas.content as schema_json
++                      from turns
++                      left join schemas on turns.schema_id = schemas.id
++                     where turns.id = ?
++                    """,
++                    [turn_id],
++                )
++            ),
++            None,
++        )
++        if row is None or row["response_json"] is None:
++            return None
++        inputs = self.load_chain(row["parent_message_hash"])
++        outputs = self.load_chain(row["tip_message_hash"])[len(inputs) :]
++        return resolve_payload(
++            row["response_json"],
++            outputs,
++            self._turn_tool_pairs(turn_id),
++            schema=_load(row["schema_json"]),
++            model_replacements=_model_json_replacements(row["model"]),
++        )
++
++    def _turn_tool_pairs(self, turn_id: str) -> list[tuple[str, str]]:
++        "The (name, description) of every tool the turn was given."
++        return [
++            (row["name"], row["description"])
++            for row in self.db.query(TURN_TOOLS_SQL, [turn_id])
++        ]
++
+     def _log_in_transaction(self, response, thread_id: str | None) -> str:
+         if thread_id is None:
+             conversation = getattr(response, "conversation", None)
+@@ -481,7 +524,8 @@ class LogStore:
+         )
+         # _messages_now() rather than messages(), which is a coroutine on
+         # AsyncResponse.
+-        tip = self.ensure_chain(response._messages_now(), parent=parent)
++        own_messages = response._messages_now()
++        tip = self.ensure_chain(own_messages, parent=parent)
+ 
+         schema_id = None
+         if response.prompt.schema:
+@@ -512,6 +556,15 @@ class LogStore:
+                 "token_details": _dump(response.token_details),
+                 "duration_ms": response.duration_ms(),
+                 "datetime_utc": response.datetime_utc(),
++                "response_json": condense_payload(
++                    getattr(response, "response_json", None),
++                    own_messages,
++                    [(tool.name, tool.description) for tool in response.prompt.tools],
++                    schema=response.prompt.schema,
++                    model_replacements=getattr(
++                        response.model, "json_replacements", None
++                    ),
++                ),
+             },
+             replace=True,
+         )
+@@ -789,6 +842,158 @@ def _now() -> str:
+     return str(datetime.datetime.now(datetime.timezone.utc))
+ 
+ 
++# -- condensed provider payloads ----------------------------------------
++#
++# turns.response_json holds the raw provider payload with every long
++# string or JSON subtree that the turn already stores (its messages, its
++# tools, its schema, the model's json_replacements) replaced by a
++# {"$": key} reference. The replacement dict is never stored: it is
++# rebuilt from the same rows on the way out, so the same walk yields the
++# same keys on both sides.
++
++_CONDENSE_MIN_LENGTH = 64
++
++TURN_TOOLS_SQL = """
++select tools.name, tools.description
++  from turn_tools
++  join tools on tools.id = turn_tools.tool_id
++ where turn_tools.turn_id = ?
++"""
++
++
++def _dumps_compact(value: Any) -> str | None:
++    try:
++        return json.dumps(value, separators=(",", ":"))
++    except (TypeError, ValueError):
++        return None
++
++
++def _offer(out: dict[str, Any], key: str, value: Any) -> None:
++    "Offer ``value`` as a replacement under ``key`` if it is worth condensing."
++    if isinstance(value, str):
++        if len(value) >= _CONDENSE_MIN_LENGTH:
++            out[key] = value
++    elif isinstance(value, (dict, list)):
++        if not value:
++            return
++        compact = _dumps_compact(value)
++        if compact is not None and len(compact) >= _CONDENSE_MIN_LENGTH:
++            out[key] = value
++
++
++def _offer_walk(out: dict[str, Any], obj: Any, prefix: str) -> None:
++    "Offer every container and leaf of ``obj`` under its path."
++    _offer(out, prefix, obj)
++    if isinstance(obj, dict):
++        for key, value in obj.items():
++            _offer_walk(out, value, f"{prefix}.{key}")
++    elif isinstance(obj, list):
++        for index, item in enumerate(obj):
++            _offer_walk(out, item, f"{prefix}.{index}")
++
++
++def _payload_replacements(
++    messages,
++    tools=(),
++    schema=None,
++    model_replacements=None,
++) -> dict[str, Any]:
++    """The replacement dict for one turn's payload, keyed by position.
++
++    ``messages`` are the turn's own messages (its output), ``tools`` are
++    (name, description) pairs, ``schema`` the turn's schema and
++    ``model_replacements`` the model's json_replacements dictionary.
++    """
++    out: dict[str, Any] = {}
++    for mi, message in enumerate(messages):
++        message_dict = message.to_dict()
++        for pi, part in enumerate(message_dict.get("parts", [])):
++            base = f"{mi}.{pi}"
++            _offer(out, f"{base}.text", part.get("text"))
++            _offer(out, f"{base}.output", part.get("output"))
++            arguments = part.get("arguments")
++            if arguments:
++                compact = _dumps_compact(arguments)
++                if compact is not None:
++                    _offer(out, f"{base}.args", compact)
++                    try:
++                        spaced = json.dumps(arguments)
++                    except (TypeError, ValueError):
++                        spaced = None
++                    if spaced is not None and spaced != compact:
++                        _offer(out, f"{base}.args2", spaced)
++                _offer(out, f"{base}.argsv", arguments)
++            _offer_walk(out, part.get("provider_metadata") or {}, f"{base}.pm")
++        _offer_walk(out, message_dict.get("provider_metadata") or {}, f"{mi}.pm")
++
++    # A name seen with two different descriptions is ambiguous, so it is
++    # dropped on both sides whatever order the pairs arrive in.
++    descriptions: dict[str, str | None] = {}
++    for name, description in tools:
++        if not name or not isinstance(description, str):
++            continue
++        if len(description) < _CONDENSE_MIN_LENGTH:
++            continue
++        if name not in descriptions:
++            descriptions[name] = description
++        elif descriptions[name] != description:
++            descriptions[name] = None
++    for name, description in descriptions.items():
++        if description is not None:
++            out[f"tool.{name}.description"] = description
++
++    if schema is not None:
++        _offer(out, "schema", schema)
++    for key, value in (model_replacements or {}).items():
++        out[f"m.{key}"] = value
++    return out
++
++
++def condense_payload(
++    payload: Any,
++    messages,
++    tools=(),
++    schema=None,
++    model_replacements=None,
++) -> str | None:
++    "The payload as condensed JSON text, or None when there is no payload."
++    if payload is None:
++        return None
++    replacements = _payload_replacements(messages, tools, schema, model_replacements)
++    return json.dumps(condense_json(payload, replacements))
++
++
++def resolve_payload(
++    condensed: str | None,
++    messages,
++    tools=(),
++    schema=None,
++    model_replacements=None,
++) -> Any:
++    """Invert :func:`condense_payload`. Raises ``UncondenseError`` when a
++    reference no longer resolves against the rows it was condensed from."""
++    if condensed is None:
++        return None
++    replacements = _payload_replacements(messages, tools, schema, model_replacements)
++    return uncondense_json(json.loads(condensed), replacements)
++
++
++def _model_json_replacements(model_id: str | None) -> dict[str, Any] | None:
++    "The json_replacements dictionary of the model that produced a turn."
++    if not model_id:
++        return None
++    # Imported here: the llm package imports this module.
++    from llm import UnknownModelError, get_model
++
++    try:
++        model = get_model(model_id)
++    except UnknownModelError:
++        # Markers that needed the dictionary fail later, as
++        # UncondenseError, rather than resolving against nothing.
++        return None
++    return getattr(model, "json_replacements", None)
++
++
+ # -- llm logs support ---------------------------------------------------
+ #
+ # Rows shaped like the ones the older `responses` query produced, so the
+@@ -809,6 +1014,7 @@ select
+     turns.token_details,
+     turns.parent_message_hash,
+     turns.tip_message_hash,
++    turns.response_json,
+     threads.name as conversation_name,
+     turns.model as conversation_model,
+     schemas.content as schema_json{rank_select}
+@@ -963,11 +1169,9 @@ class _LogRowBuilder:
+                 "system": _text_of(system_parts, TextPart) or None,
+                 "response": _text_of(out_parts, TextPart),
+                 "reasoning": _text_of(out_parts, ReasoningPart) or None,
+-                # Neither is stored any more: the chain holds the
+-                # structure, and the raw provider payload was dropped as
+-                # redundant with it.
++                # Not stored: the chain holds the prompt's structure.
+                 "prompt_json": None,
+-                "response_json": None,
++                "response_json": self._resolve_response_json(row, outputs),
+                 "_input_parts": input_parts,
+                 "_output_parts": out_parts,
+                 # Internal, stripped before rendering - the enrichment
+@@ -981,6 +1185,24 @@ class _LogRowBuilder:
+         )
+         return built
+ 
++    def _resolve_response_json(self, row: dict, outputs) -> str | None:
++        """The turn's payload as JSON text, resolved. None when the turn
++        stored none, or when a reference no longer resolves - one broken
++        payload must not fail the whole listing."""
++        if not row.get("response_json"):
++            return None
++        try:
++            payload = resolve_payload(
++                row["response_json"],
++                outputs,
++                self.store._turn_tool_pairs(row["id"]),
++                schema=_load(row.get("schema_json")),
++                model_replacements=_model_json_replacements(row.get("model")),
++            )
++        except UncondenseError:
++            return None
++        return json.dumps(payload)
++
+     def _input_segment_hashes(self, parent_hash: str | None) -> list[str]:
+         """Hashes of the turn's own input messages - the same trailing
+         user/tool run build() derives, walked directly in the table."""
+diff --git a/llm/migrations.py b/llm/migrations.py
+index 73d282c..2e23e62 100644
+--- a/llm/migrations.py
++++ b/llm/migrations.py
+@@ -720,3 +720,12 @@ def m026_message_tree_view(db):
+     # path in the output - selecting from the view preserves tree order
+     # only while sorted by path.
+     db.create_view("message_tree", MESSAGE_TREE_SQL)
++
++
++@migration
++def m027_turns_response_json(db):
++    # The raw provider payload (response.json()), condensed against the
++    # turn's own messages, tools, schema and the model's boilerplate
++    # dictionary. NULL for turns logged before this and for models with
++    # no raw payload.
++    db["turns"].add_column("response_json", str)
+diff --git a/pyproject.toml b/pyproject.toml
+index 671c8f8..049a9e6 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -26,7 +26,7 @@ classifiers = [
+ 
+ dependencies = [
+     "click",
+-    "condense-json>=0.1.3",
++    "condense-json>=1.1",
+     "openai>=2.32.0",
+     "click-default-group>=1.2.3",
+     "sqlite-utils>=4.0",

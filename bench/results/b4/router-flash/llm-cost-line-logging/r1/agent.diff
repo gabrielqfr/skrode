@@ -1,0 +1,71 @@
+diff --git a/src/sensei_top/logs.py b/src/sensei_top/logs.py
+index 49c9b53..32a5866 100644
+--- a/src/sensei_top/logs.py
++++ b/src/sensei_top/logs.py
+@@ -8,7 +8,9 @@ problem a user reports arrives with the lines that led up to it, and a scratch
+ - **Levels.** The file takes WARNING and up, DEBUG with ``--verbose``; the
+   console keeps the levels it had before the file existed, ERROR, WARNING with
+   ``--verbose``. Each handler filters on its own level, and the root logger's
+-  is the lower of the two, so neither starves the other.
++  is the lower of the two, so neither starves the other. Both handlers also
++  take ``sensei_top.llm``'s INFO lines, whatever their own levels: the cost of
++  each generate call is one of them and a user is promised it.
+ - **Lines.** ``2026-10-06T14:03:22.418Z 3f9a1c2e WARNING sensei_top.live: …``:
+   UTC, so a file compares across machines and across a DST change without
+   arithmetic; then the launch's session id, which tells apart ``serve`` and a
+@@ -105,6 +107,27 @@ class _Session(logging.Filter):
+         return True
+ 
+ 
++class _Level(logging.Filter):
++    """Passes ``floor`` and up, and ``sensei_top.llm``'s INFO lines below it.
++
++    Those lines say what each generate call cost, and a user is promised to
++    see them on the console and in the file (non-negotiable 5, "never
++    silent"). The name must be exactly ``sensei_top.llm`` or start with
++    ``sensei_top.llm.``, so a logger merely sharing the prefix does not pass.
++    """
++
++    def __init__(self, floor: int) -> None:
++        super().__init__()
++        self.floor = floor
++
++    def filter(self, record: logging.LogRecord) -> bool:
++        if record.levelno >= self.floor:
++            return True
++        if record.levelno < logging.INFO:
++            return False
++        return record.name == "sensei_top.llm" or record.name.startswith("sensei_top.llm.")
++
++
+ class _FileFormatter(logging.Formatter):
+     """The file's line, in UTC, with the home directory written as ``~``."""
+ 
+@@ -205,7 +228,8 @@ def install(db_path: Path, command: str, *, verbose: bool) -> Path | None:
+     root = logging.getLogger()
+     if not root.handlers:
+         console = logging.StreamHandler()
+-        console.setLevel(logging.WARNING if verbose else logging.ERROR)
++        console.setLevel(logging.INFO)
++        console.addFilter(_Level(logging.WARNING if verbose else logging.ERROR))
+         console.setFormatter(logging.Formatter(CONSOLE_FORMAT))
+         root.addHandler(console)
+         _installed.append(console)
+@@ -227,12 +251,16 @@ def install(db_path: Path, command: str, *, verbose: bool) -> Path | None:
+         print(f"WARNING not writing a log file: {exc}", file=sys.stderr)
+         file_handler = None
+     else:
+-        file_handler.setLevel(logging.DEBUG if verbose else logging.WARNING)
++        file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
+         file_handler.setFormatter(_FileFormatter(_home()))
+         file_handler.addFilter(_Session(secrets.token_hex(4)))
+         root.addHandler(file_handler)
+         _installed.append(file_handler)
+         file_handler.handle(_header(command, db))
++        if not verbose:
++            # After the header: it is an INFO record from another logger, and
++            # the filter would drop it.
++            file_handler.addFilter(_Level(logging.WARNING))
+ 
+     if _installed:
+         root.setLevel(min(handler.level for handler in _installed))

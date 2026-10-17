@@ -1,0 +1,156 @@
+diff --git a/docs/cli.rst b/docs/cli.rst
+index c446a72..ec5b419 100644
+--- a/docs/cli.rst
++++ b/docs/cli.rst
+@@ -2228,6 +2228,12 @@ Every option for this table (with the exception of ``--pk-none``) can be specifi
+ ``--add-foreign-key column other_table other_column``
+     Add a foreign key constraint to ``column`` pointing to ``other_table.other_column``.
+ 
++``--strict``
++    Convert the table to a STRICT table. This will fail if the version of SQLite in use does not support STRICT tables.
++
++``--no-strict``
++    Convert a STRICT table back to a regular, non-strict table.
++
+ If you want to see the SQL that will be executed to make the change without actually executing it, add the ``--sql`` flag. For example:
+ 
+ .. code-block:: bash
+diff --git a/docs/python-api.rst b/docs/python-api.rst
+index d444806..ed379c1 100644
+--- a/docs/python-api.rst
++++ b/docs/python-api.rst
+@@ -1753,6 +1753,29 @@ To alter the type of a column, use the ``types=`` argument:
+ 
+ See :ref:`python_api_add_column` for a list of available types.
+ 
++.. _python_api_transform_strict:
++
++Changing strict mode
++--------------------
++
++Tables can be created in SQLite's `STRICT mode <https://www.sqlite.org/stricttables.html>`__, which enforces that every value stored in a column matches that column's declared type.
++
++You can use the ``strict=`` parameter to convert an existing table to a STRICT table, or to convert a STRICT table back to a regular table:
++
++.. code-block:: python
++
++    # Convert this table to a STRICT table:
++    table.transform(strict=True)
++
++    # Convert a STRICT table back to a regular table:
++    table.transform(strict=False)
++
++The default value is ``None``, which preserves the table's existing strict mode.
++
++Passing ``strict=True`` raises a ``sqlite_utils.db.TransformError`` if the version of SQLite in use does not support STRICT tables.
++
++When converting a table to STRICT mode, every existing row is validated as it is copied into the new table. If any row contains a value that does not match its column's type the transformation fails with a ``sqlite3.IntegrityError``, and the original table, its strict mode and its rows are all left unchanged.
++
+ .. _python_api_transform_rename_columns:
+ 
+ Renaming columns
+diff --git a/sqlite_utils/cli.py b/sqlite_utils/cli.py
+index 7fab72b..e0b8969 100644
+--- a/sqlite_utils/cli.py
++++ b/sqlite_utils/cli.py
+@@ -2718,6 +2718,11 @@ def schema(
+     multiple=True,
+     help="Drop foreign key constraint for this column",
+ )
++@click.option(
++    "--strict/--no-strict",
++    default=None,
++    help="Enable or disable STRICT mode (default: preserve current mode)",
++)
+ @click.option("--sql", is_flag=True, help="Output SQL without executing it")
+ @load_extension_option
+ def transform(
+@@ -2735,6 +2740,7 @@ def transform(
+     default_none,
+     add_foreign_keys,
+     drop_foreign_keys,
++    strict,
+     sql,
+     load_extension,
+ ):
+@@ -2796,6 +2802,7 @@ def transform(
+             defaults=default_dict,
+             drop_foreign_keys=drop_foreign_keys_value,
+             add_foreign_keys=add_foreign_keys_value,
++            strict=strict,
+         ):
+             click.echo(line)
+     else:
+@@ -2809,6 +2816,7 @@ def transform(
+             defaults=default_dict,
+             drop_foreign_keys=drop_foreign_keys_value,
+             add_foreign_keys=add_foreign_keys_value,
++            strict=strict,
+         )
+ 
+ 
+diff --git a/sqlite_utils/db.py b/sqlite_utils/db.py
+index 62e3656..aa0d1be 100644
+--- a/sqlite_utils/db.py
++++ b/sqlite_utils/db.py
+@@ -2514,6 +2514,7 @@ class Table(Queryable):
+         foreign_keys: Optional[ForeignKeysType] = None,
+         column_order: Optional[List[str]] = None,
+         keep_table: Optional[str] = None,
++        strict: Optional[bool] = None,
+     ) -> "Table":
+         """
+         Apply an advanced alter table, including operations that are not supported by
+@@ -2536,6 +2537,7 @@ class Table(Queryable):
+           to use when creating the table
+         :param keep_table: If specified, the existing table will be renamed to this and will not be
+           dropped
++        :param strict: Set to ``True`` to make the table strict or ``False`` to make it non-strict. Defaults to ``None``, which preserves the existing strict mode.
+         """
+         if not self.exists():
+             raise ValueError("Cannot transform a table that doesn't exist yet")
+@@ -2551,6 +2553,7 @@ class Table(Queryable):
+             foreign_keys=foreign_keys,
+             column_order=column_order,
+             keep_table=keep_table,
++            strict=strict,
+         )
+         pragma_foreign_keys_was_on = bool(
+             self.db.execute("PRAGMA foreign_keys").fetchone()[0]
+@@ -2587,6 +2590,8 @@ class Table(Queryable):
+                 self.db.execute("PRAGMA defer_foreign_keys=OFF;")
+             if should_disable_foreign_keys:
+                 self.db.execute("PRAGMA foreign_keys=1;")
++        if strict is not None:
++            self._defaults["strict"] = strict
+         return self
+ 
+     def transform_sql(
+@@ -2604,6 +2609,7 @@ class Table(Queryable):
+         column_order: Optional[List[str]] = None,
+         tmp_suffix: Optional[str] = None,
+         keep_table: Optional[str] = None,
++        strict: Optional[bool] = None,
+     ) -> List[str]:
+         """
+         Return a list of SQL statements that should be executed in order to apply this transformation.
+@@ -2624,7 +2630,10 @@ class Table(Queryable):
+         :param tmp_suffix: Suffix to use for the temporary table name
+         :param keep_table: If specified, the existing table will be renamed to this and will not be
+           dropped
++        :param strict: Set to ``True`` to make the table strict or ``False`` to make it non-strict. Defaults to ``None``, which preserves the existing strict mode.
+         """
++        if strict is True and not self.db.supports_strict:
++            raise TransformError("SQLite does not support STRICT tables")
+         types = types or {}
+         rename = rename or {}
+         drop = drop or set()
+@@ -2806,7 +2815,7 @@ class Table(Queryable):
+                 defaults=create_table_defaults,
+                 foreign_keys=create_table_foreign_keys,
+                 column_order=column_order,
+-                strict=self.strict,
++                strict=self.strict if strict is None else strict,
+             ).strip()
+         )
+ 

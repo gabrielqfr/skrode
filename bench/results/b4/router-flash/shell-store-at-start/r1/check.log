@@ -1,0 +1,13 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.2 <bench-repos>/wt/router-flash-shell-store-at-start-r1/web[39m
+
+ [32m✓[39m src/bridge.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 17:04:23
+[2m   Duration [22m 145ms[2m (transform 50%, import 28%, tests 15%, worker 7%, environment 1%)[22m
+
+$ oxlint
+Found 0 warnings and 0 errors.
+Finished in 23ms on 214 files with 104 rules using 16 threads.

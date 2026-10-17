@@ -1,0 +1,4 @@
+..................................x..................                    [100%]
+=========================== short test summary info ============================
+XFAIL tests/test_setattr.py::TestSetAttr::test_slotted_confused
+52 passed, 1 xfailed in 0.13s

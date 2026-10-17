@@ -1,0 +1,118 @@
+diff --git a/docs/changelog/4047.bugfix.rst b/docs/changelog/4047.bugfix.rst
+new file mode 100644
+index 00000000..b5b2edd6
+--- /dev/null
++++ b/docs/changelog/4047.bugfix.rst
+@@ -0,0 +1,2 @@
++Values passed via ``--override``/``-x`` or ``TOX_OVERRIDE`` now resolve substitutions such as ``{posargs}``,
++``{env:VAR}`` and ``{env_name}``, instead of reaching the environment as literal text - by :user:`gaborbernat`.
+diff --git a/docs/reference/config.rst b/docs/reference/config.rst
+index 85a03364..342091d2 100644
+--- a/docs/reference/config.rst
++++ b/docs/reference/config.rst
+@@ -2349,6 +2349,25 @@ separators:
+ Multiple dots can be escaped in the same key: ``-x 'some\.dotted\.name.key=val'``. A backslash not followed by a dot
+ passes through literally.
+ 
++Substitutions inside an override
++================================
++
++.. versionadded:: 4.61
++
++An override value goes through the same substitution pass as a value written in the configuration file, so
++substitutions such as ``{posargs}``, ``{env:VAR}`` and ``{env_name}`` are resolved before the value is converted:
++
++.. code-block:: bash
++
++   tox -x env_run_base.commands='pytest {posargs:tests}' -e py -- -k slow
++
++Here ``{posargs:tests}`` picks up ``-k slow`` from the command line, so the environment runs ``pytest -k slow`` (and
++``pytest tests`` when no positional arguments are passed).
++
++.. note::
++
++   An override always uses the ini spelling of a substitution, even in a TOML project.
++
+ ***********
+  TOML only
+ ***********
+diff --git a/src/tox/config/loader/api.py b/src/tox/config/loader/api.py
+index 1b05118d..89c2eda9 100644
+--- a/src/tox/config/loader/api.py
++++ b/src/tox/config/loader/api.py
+@@ -1,5 +1,6 @@
+ from __future__ import annotations
+ 
++import inspect
+ from abc import abstractmethod
+ from argparse import ArgumentTypeError
+ from collections.abc import Iterable, Mapping
+@@ -167,6 +168,7 @@ class Loader(Convert[T]):
+         from tox.config.set_env import SetEnv  # ruff:ignore[import-outside-top-level]
+ 
+         overrides = [o for alias in (key, *all_keys) for o in self.overrides.get(alias, [])]
++        delay_replace = inspect.isclass(of_type) and issubclass(of_type, SetEnv)
+         converted: Any = None  # merged across loader/overrides, only the final cast can name the type
+         for alias in (key, *all_keys):
+             try:
+@@ -180,7 +182,12 @@ class Loader(Convert[T]):
+                 raise KeyError(key)
+ 
+         for override in overrides:
+-            converted_override = _STR_CONVERT.to(override.value, of_type, factory)
++            # an override is a raw CLI string that has not been through the loader's substitution pass
++            if delay_replace or conf is None:
++                override_value = override.value
++            else:
++                override_value = self.substitute(override.value, conf, args)
++            converted_override = _STR_CONVERT.to(override_value, of_type, factory)
+             if override.append and converted is not None:
+                 if isinstance(converted, list) and isinstance(converted_override, list):
+                     converted += converted_override
+@@ -219,6 +226,18 @@ class Loader(Convert[T]):
+         """
+         return self.to(raw, of_type, factory)
+ 
++    def substitute(self, value: str, conf: Config, args: ConfigLoadArgs) -> str:
++        """Substitute the references this loader understands inside a raw value.
++
++        :param value: the raw string
++        :param conf: the global config
++        :param args: env args
++
++        :returns: the string with every substitution this loader understands resolved
++
++        """
++        raise NotImplementedError
++
+ 
+ def apply_overrides_to_raw(overrides: Iterable[Override], key: str, value: T) -> T:
+     """Fold the overrides targeting ``key`` onto a raw (pre-conversion) value.
+diff --git a/src/tox/config/loader/ini/__init__.py b/src/tox/config/loader/ini/__init__.py
+index 9ecc7d65..3b225c7b 100644
+--- a/src/tox/config/loader/ini/__init__.py
++++ b/src/tox/config/loader/ini/__init__.py
+@@ -112,6 +112,9 @@ class IniLoader(StrConvert, Loader[str]):
+             cast("SetEnv", converted).use_replacer(replacer, args)  # delay_replace means of_type is SetEnv
+         return converted
+ 
++    def substitute(self, value: str, conf: Config, args: ConfigLoadArgs) -> str:
++        return replace(conf, ReplaceReferenceIni(conf, self), value, args)
++
+     def found_keys(self) -> set[str]:
+         return set(self._section_proxy.keys())
+ 
+diff --git a/src/tox/config/loader/toml/__init__.py b/src/tox/config/loader/toml/__init__.py
+index 01b2ffc8..c1263409 100644
+--- a/src/tox/config/loader/toml/__init__.py
++++ b/src/tox/config/loader/toml/__init__.py
+@@ -92,6 +92,9 @@ class TomlLoader(Loader[TomlTypes]):
+             cast("SetEnv", result).use_replacer(_toml_replacer, args=args)  # delay_replace means of_type is SetEnv
+         return result
+ 
++    def substitute(self, value: str, conf: Config, args: ConfigLoadArgs) -> str:
++        return replace(conf, TomlReplaceLoader(conf, self), value, args)
++
+     def found_keys(self) -> set[str]:
+         return set(self.content.keys()) - self._unused_exclude
+ 
