@@ -1,0 +1,5 @@
+tests/test_cli.py
+tests/test_fts.py
+tests/test_query.py
+tests/test_rows.py
+tests/test_utils.py

@@ -1,0 +1,2 @@
+tests/test_llm_logs.py
+tests/test_plugins.py

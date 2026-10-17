@@ -4,12 +4,11 @@
 (one line per run, the grade from `check.sh`), and per run a directory holding
 `row.out` (the row's stdout) and, for router rows, `state/jobs.jsonl`.
 GPU batches add `power.jsonl` (GPU watts) and `idle.tsv` (loaded-idle
-windows); the DeepSeek forwarder adds `usage.jsonl`. Nothing reads them yet.
+windows); the DeepSeek forwarder adds `usage.jsonl`.
 
 This module joins each run to its Claude usage, its router jobs, its worker
 dollars and its marginal GPU energy, writes `runs.tsv` (one line per run) and
 `rows.tsv` (one line per row), and prints `rows.tsv` as a markdown table.
-It replaces the energy POC script.
 
 Why the energy is marginal: it is the energy above the GPU's idle draw with the
 model loaded, taken from the last idle window before the job, because the

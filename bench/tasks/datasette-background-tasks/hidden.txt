@@ -1,0 +1,4 @@
+tests/test_background_tasks.py
+tests/test_cli_serve_get.py
+tests/test_lifespan.py
+tests/test_plugins.py

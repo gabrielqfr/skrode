@@ -1,5 +1,5 @@
 # Bonsai 2 27B (PrismML), served by PrismML's llama-server fork with --jinja.
-status: untested
+status: tested
 sources:
   - https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf
   - https://github.com/PrismML-Eng/Bonsai-demo

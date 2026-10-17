@@ -1,0 +1,4 @@
+tests/config/loader/test_loader.py
+tests/config/loader/test_set_env_native.py
+tests/config/loader/test_set_env_override.py
+tests/config/test_set_env.py

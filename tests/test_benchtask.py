@@ -64,11 +64,7 @@ def make_task(root: Path, name: str, spec: str, hidden: dict[str, str] | None = 
     folder.mkdir()
     (folder / "spec.md").write_text(spec, encoding="utf-8")
     if hidden:
-        hidden_dir = folder / "hidden"
-        for rel, text in hidden.items():
-            path = hidden_dir / rel
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
+        (folder / "hidden.txt").write_text("".join(f"{rel}\n" for rel in hidden), encoding="utf-8")
     for key, value in extra.items():
         filename = {"files_txt": "files.txt", "commands_txt": "commands.txt", "kind": "kind"}[key]
         (folder / filename).write_text(value, encoding="utf-8")

@@ -1,0 +1,3 @@
+tests/test_permissions.py
+tests/test_success_envelope.py
+tests/test_tasks_endpoint.py

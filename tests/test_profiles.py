@@ -7,7 +7,7 @@ from skrode.profiles import ProfileError, load_profile, request_params
 
 def test_bonsai_profile_loads():
     p = load_profile("bonsai2-27b")
-    assert p["status"] == "untested"
+    assert p["status"] == "tested"
     assert p["agent"] == {
         "temperature": 1.0,
         "top_p": 0.95,

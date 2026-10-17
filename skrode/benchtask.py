@@ -60,14 +60,10 @@ def listed(path: Path) -> list[str]:
 
 
 def hidden_paths(task_dir: Path) -> list[str]:
-    hidden = task_dir / "hidden"
-    if not hidden.is_dir():
+    listing = task_dir / "hidden.txt"
+    if not listing.is_file():
         return []
-    return sorted(
-        p.relative_to(hidden).as_posix()
-        for p in hidden.rglob("*")
-        if p.is_file()
-    )
+    return sorted(listed(listing))
 
 
 def _first_backticked(line: str) -> str:

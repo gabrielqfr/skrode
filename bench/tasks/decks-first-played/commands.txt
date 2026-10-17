@@ -1,0 +1,6 @@
+# The spec lists 6 commands; the router takes at most 5. gen:types feeds tsc, so they run as one.
+uv run pytest -q tests/test_api.py
+uv run ruff check .
+pnpm --dir web gen:types && pnpm --dir web exec tsc -b
+pnpm --dir web test
+pnpm --dir web lint

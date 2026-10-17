@@ -1,0 +1,6 @@
+tests/test_cli.py
+tests/test_create.py
+tests/test_extracts.py
+tests/test_foreign_keys.py
+tests/test_m2m.py
+tests/test_transform.py

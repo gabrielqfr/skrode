@@ -1,0 +1,2 @@
+tests/test_termui.py
+tests/typing/typing_edit.py

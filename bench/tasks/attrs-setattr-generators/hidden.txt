@@ -1,0 +1,2 @@
+tests/test_compat.py
+tests/test_setattr.py

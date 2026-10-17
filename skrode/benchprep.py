@@ -1,14 +1,17 @@
 """Prepare eval tasks for a bench run: a clone per task, its base commit, its args and config.
 
 Every bench row gets the same input (D24): the task text from benchtask and a base commit that
-is the task's parent plus its hidden tests. Each task gets its own clone, so a source repo is
-only read (mtga-tracker stays untouched) and each clone can carry the task's own setup.
+is the task's parent plus its hidden tests, taken from the task's merged commit. The tests are
+fetched, never stored: each source repo is mirrored once from the task's `repo` URL, and each
+task gets its own clone of that mirror, so a source is only read and each clone can carry the
+task's own setup.
 """
 
 import argparse
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -59,17 +62,25 @@ def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     return result.stdout
 
 
-def source_for(task_dir: Path, sources: Path, default_source: Path) -> Path:
+def source_for(task_dir: Path, sources: Path) -> tuple[str, Path]:
     repo_file = task_dir / "repo"
     if not repo_file.is_file():
-        return default_source
+        raise PrepError("no repo")
     url = repo_file.read_text(encoding="utf-8").strip()
     parts = [p for p in url.replace("\\", "/").split("/") if p]
     owner = parts[-2]
     name = parts[-1]
     if name.endswith(".git"):
         name = name[: -4]
-    return sources / f"{owner}-{name}"
+    return url, sources / f"{owner}-{name}"
+
+
+def ensure_source(url: str, source: Path) -> None:
+    if source.exists():
+        return
+    source.parent.mkdir(parents=True, exist_ok=True)
+    # a mirror keeps every branch: some merged commits live off the default branch
+    _git(source.parent, "clone", "-q", "--mirror", url, str(source))
 
 
 def setup_commands(task_dir: Path) -> tuple[str, ...]:
@@ -88,11 +99,27 @@ def ensure_clone(source: Path, dest: Path) -> None:
     _git(dest.parent, "clone", "-q", "--no-checkout", str(source), str(dest))
 
 
-def bench_base(repo: Path, parent: str, hidden: Path) -> str:
+def _require_commit(repo: Path, rev: str, what: str) -> None:
     try:
-        _git(repo, "cat-file", "-e", f"{parent}^{{commit}}")
+        _git(repo, "cat-file", "-e", f"{rev}^{{commit}}")
     except PrepError as exc:
-        raise PrepError(f"parent {parent[:12]} is not in {repo}") from exc
+        raise PrepError(f"{what} {rev[:12]} is not in {repo}") from exc
+
+
+def _tree_entry(repo: Path, commit: str, rel: str) -> tuple[str, str]:
+    listing = _git(repo, "ls-tree", "-z", commit, "--", rel)
+    for entry in listing.split("\0"):
+        info, _, path = entry.partition("\t")
+        if path == rel:
+            mode, kind, blob = info.split()
+            if kind == "blob":
+                return mode, blob
+    raise PrepError(f"{rel} is not in commit {commit[:12]}")
+
+
+def bench_base(repo: Path, parent: str, commit: str, hidden: list[str]) -> str:
+    _require_commit(repo, parent, "parent")
+    _require_commit(repo, commit, "commit")
 
     date = _git(repo, "show", "-s", "--format=%cI", parent).strip()
 
@@ -108,37 +135,51 @@ def bench_base(repo: Path, parent: str, hidden: Path) -> str:
             "GIT_COMMITTER_DATE": date,
         }
         _git(repo, "read-tree", parent, env=git_env)
-        for rel in hidden_paths(hidden.parent):
-            path = hidden / rel
-            blob = _git(repo, "hash-object", "-w", "--no-filters", "--", str(path)).strip()
-            mode = "100755" if os.access(path, os.X_OK) else "100644"
+        for rel in hidden:
+            mode, blob = _tree_entry(repo, commit, rel)
             _git(repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{rel}", env=git_env)
         tree = _git(repo, "write-tree", env=git_env).strip()
-        commit = ("commit-tree", "--no-gpg-sign", tree, "-p", parent, "-m", BASE_MESSAGE)
-        return _git(repo, *commit, env=git_env).strip()
+        base = ("commit-tree", "--no-gpg-sign", tree, "-p", parent, "-m", BASE_MESSAGE)
+        return _git(repo, *base, env=git_env).strip()
+
+
+def write_hidden(repo: Path, base: str, hidden: list[str], dest: Path) -> None:
+    """Write the hidden tests where check.sh copies them from ($HIDDEN_DIR)."""
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    if not hidden:
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        # a private index: the clone's own index and work tree stay as they are
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        _git(repo, f"--work-tree={dest}", "checkout", base, "--", *hidden, env=env)
 
 
 def prepare(
-    task_dir: Path, *, sources: Path, default_source: Path, clones: Path
+    task_dir: Path, *, sources: Path, clones: Path, out: Path
 ) -> tuple[dict, tuple[str, ...]]:
-    parent_file = task_dir / "parent"
-    if not parent_file.is_file():
-        raise PrepError("no parent")
-    parent = parent_file.read_text(encoding="utf-8").strip()
+    revs = {}
+    for name in ("parent", "commit"):
+        path = task_dir / name
+        if not path.is_file():
+            raise PrepError(f"no {name}")
+        revs[name] = path.read_text(encoding="utf-8").strip()
 
     try:
         args = task_args(task_dir)
     except TaskError as exc:
         raise PrepError(str(exc)) from exc
+    hidden = hidden_paths(task_dir)
 
-    source = source_for(task_dir, sources, default_source)
-    if not source.is_dir():
-        raise PrepError(f"no source repo at {source}")
+    url, source = source_for(task_dir, sources)
+    ensure_source(url, source)
 
     dest = clones / task_dir.name
     ensure_clone(source, dest)
-    base = bench_base(dest, parent, task_dir / "hidden")
+    base = bench_base(dest, revs["parent"], revs["commit"], hidden)
     _git(dest, "update-ref", f"refs/heads/{BRANCH_PREFIX}{task_dir.name}", base)
+    write_hidden(dest, base, hidden, out / task_dir.name / "hidden")
 
     args["repo"] = str(dest.resolve())
     args["base"] = base
@@ -149,7 +190,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m skrode.benchprep")
     parser.add_argument("--tasks", type=Path, required=True)
     parser.add_argument("--sources", type=Path, required=True)
-    parser.add_argument("--default-source", type=Path, required=True)
     parser.add_argument("--clones", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("ids", nargs="*")
@@ -175,8 +215,8 @@ def main(argv: list[str] | None = None) -> int:
             args, _ = prepare(
                 folder,
                 sources=options.sources,
-                default_source=options.default_source,
                 clones=options.clones,
+                out=options.out,
             )
         except PrepError as error:
             print(f"{name}: {error}", file=sys.stderr)
@@ -205,9 +245,12 @@ def main(argv: list[str] | None = None) -> int:
     config_text = "\n".join(config_entries)
     (options.out / "config.toml").write_text(config_text, encoding="utf-8")
 
-    tsv_lines = ["id\ttask_dir\trepo\tbase"]
+    tsv_lines = ["id\ttask_dir\trepo\tbase\thidden"]
     for name, folder, args in successful:
-        tsv_lines.append(f"{name}\t{folder.resolve()}\t{args['repo']}\t{args['base']}")
+        hidden_dir = (options.out / name / "hidden").resolve()
+        tsv_lines.append(
+            f"{name}\t{folder.resolve()}\t{args['repo']}\t{args['base']}\t{hidden_dir}"
+        )
     (options.out / "tasks.tsv").write_text("\n".join(tsv_lines) + "\n", encoding="utf-8")
 
     return 1 if failed else 0

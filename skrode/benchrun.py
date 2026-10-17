@@ -296,7 +296,11 @@ def run_once(
                 result = subprocess.run(
                     ["bash", str(task_dir / "check.sh")],
                     cwd=wt,
-                    env={**os.environ, "TASK_DIR": str(task_dir)},
+                    env={
+                        **os.environ,
+                        "TASK_DIR": str(task_dir),
+                        "HIDDEN_DIR": task.get("hidden", str(task_dir / "hidden")),
+                    },
                     stdout=log,
                     stderr=log,
                     timeout=CHECK_TIMEOUT_S,

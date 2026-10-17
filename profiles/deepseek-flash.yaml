@@ -1,0 +1,8 @@
+# DeepSeek V4.1 Flash, for the bench's router-flash row (D22): served through bench/forwarder.py,
+# never llama-server. No sampling keys: thinking mode ignores temperature and penalties. Effort
+# high is DeepSeek's default (medium maps to high anyway). max_tokens is a ceiling that includes
+# reasoning.
+status: tested
+agent:
+  max_tokens: 32000
+  reasoning_effort: high
