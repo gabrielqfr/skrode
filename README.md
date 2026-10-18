@@ -21,6 +21,13 @@ Saved is the median per-run saving as a share of Sonnet's median cost; dollars a
 Code's own cost figure, the stand-in for quota. The Bonsai row ran only the 10 connected and
 harder tasks. The full results, method, limits and rerun steps are in [`docs/benchmark.md`](docs/benchmark.md).
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/bench-saved-dark.svg">
+  <img alt="Claude spend saved vs Sonnet alone, by batch. Connected tasks: Haiku subagent +24%, DeepSeek Flash +15%, Bonsai -1%. Harder tasks: Haiku subagent +55%, DeepSeek Flash -3%, Bonsai -61%. Smaller tasks: Haiku subagent +8%, DeepSeek Flash -14%, Bonsai not run." src="docs/img/bench-saved-light.svg">
+</picture>
+
+`bench/chart.py` draws this chart from `bench/results/`.
+
 ## How it works
 
 Claude Code calls `run_local_subagent` with a task, the files to touch and the commands that
@@ -42,7 +49,7 @@ credentials; protected tests are never edited.
 | `skrode/` | The server, the worker and the bench harness (`benchprep`, `benchrun`, `benchsummary`) |
 | `bench/tasks/` | The 28 bench tasks: specs, checks and upstream commits ([README](bench/tasks/README.md)) |
 | `bench/results/` | The raw results the tables come from |
-| `bench/forwarder.py`, `bench/gpu-batch.sh`, `bench/sampler.py` | Bench tooling: the DeepSeek pass-through, the GPU batch, the power sampler |
+| `bench/forwarder.py`, `bench/gpu-batch.sh`, `bench/sampler.py`, `bench/chart.py` | Bench tooling: the DeepSeek pass-through, the GPU batch, the power sampler, the README chart |
 | `profiles/` | Per-model request settings (Bonsai, DeepSeek Flash) |
 | `prompts/worker.md`, `schemas/` | Every message sent to the worker; the JSON Schemas for arguments, records and reports |
 | `tests/` | pytest; no test needs a model server or the network |
