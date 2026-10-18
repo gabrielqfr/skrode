@@ -140,8 +140,8 @@ commands run sandboxed with no network.
          --sources ~/.cache/skrode-bench/sources --clones ~/.cache/skrode-bench/clones \
          --out ~/.cache/skrode-bench/prep
 
-   The 10 sensei-top tasks fail here until that project's history is public
-   (see [`bench/tasks/README.md`](../bench/tasks/README.md)); the other 18 prepare.
+   The 10 sensei-top tasks build from snapshot tags in that project's public repository
+   (see [`bench/tasks/README.md`](../bench/tasks/README.md)).
 
 2. Run a row over some tasks:
 

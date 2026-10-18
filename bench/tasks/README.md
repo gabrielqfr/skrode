@@ -61,11 +61,13 @@ the 18 older, smaller tasks.
 | `topdeck-not-constructed` | sensei-top/sensei-top | AGPL-3.0 | b4 |
 | `watcher-stopped-notice` | sensei-top/sensei-top | AGPL-3.0 | b4 |
 
-**The 10 sensei-top tasks cannot be rebuilt yet.** Their parent and merged commits are in the
-project's development history, which goes public with sensei-top 1.0; the public repository
-holds only squashed releases until then. Their results are in the tables, and their bases were
-checked against the private history (the same base commits as the published runs). `benchprep`
-reports them as `parent ... is not in` until then.
+**The 10 sensei-top tasks come from snapshot tags.** That project's development history stays
+private; its public repository holds its releases, plus one tag per task, `bench/<task>`. The
+tag is the merged change's tree, committed on top of its parent's tree as a root commit, and
+the task's `parent` and `commit` name those two snapshot commits. They hold the same trees as
+the private commits the runs used, so each rebuilt base has the same tree as the published
+run's base; only the commit hashes differ (the base names the snapshot as its parent), which is
+why `bench/results/` records other base hashes for these tasks.
 
 ## Licence
 
