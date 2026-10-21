@@ -24,6 +24,18 @@ is concluded and kept as a record that others can read and rerun.
 | `docs/` | `benchmark.md` (results, method, rerun steps); `escalation.md` (when a job ends `passed`, `escalate` or `failed`) |
 | `profiles/` | One YAML per served model alias, checked against `schemas/profile.json` |
 
+## Docs
+
+Read a doc only when your task matches its "Read when", and by section, never whole: its headings
+and line numbers come from the `scaffold:navigating` skill's `repo_map.py --docs`.
+
+| Document | Covers | Read when |
+| --- | --- | --- |
+| [README.md](README.md) | The headline results, how it works, the repository, running it | changing how skrode is installed or run, or a published number |
+| [docs/benchmark.md](docs/benchmark.md) | The rows, results by batch and router job, what they mean, limits, how to rerun | touching `bench/`, `skrode/bench*.py` or `bench/results/` |
+| [docs/escalation.md](docs/escalation.md) | The three statuses, escalation and failure reasons, defaults, the record budget | touching `skrode/jobs.py`, `worker.py`, `acceptance.py` or `schemas/` job records |
+| [BACKLOG.md](BACKLOG.md) | Known debt and deferred work, one `BL-NNN` item each; how to add and close one | picking what to do next, or knowingly leaving something behind |
+
 ## Non-negotiables
 
 1. **Local by default.** The worker talks to `127.0.0.1` unless the user configures another
@@ -49,11 +61,34 @@ is concluded and kept as a record that others can read and rerun.
 - Tests pin behaviour. Derive expectations from the spec, never by running the code and copying
   its output into an assertion.
 - Comments say why, not what. Keep functions small and typed.
+- **Trunk branching:** `main` plus short `feature/<topic>` branches. Pushing, opening a pull
+  request and merging wait for the user's word.
+- Knowingly leaving something behind gets a `BL-NNN` item in `BACKLOG.md`; the commit that
+  finishes one carries `Closes: BL-NNN`.
+- Ask when a decision is the user's. Say what you actually verified and what you did not, and
+  correct an earlier explanation out loud when it was wrong.
+
+## Expensive files: do not read
+
+`uv.lock`, and under `bench/results/` every `row.out`, `jobs.jsonl`, `power.jsonl`, `usage.jsonl`
+and large `check.log`. Read results through `uv run python -m skrode.benchsummary` instead (see
+`docs/benchmark.md`, "Regenerate the tables").
+
+Scope greps to `bench`, `docs`, `implementer`, `profiles`, `prompts`, `schemas`, `scripts`,
+`skrode` and `tests`.
+
+## Running it
+
+    uv sync --frozen
+    claude mcp add skrode -- uv --directory "$PWD" run skrode
+
+The default worker is a llama-server on `127.0.0.1:8080` serving the alias `local`.
 
 ## Before you finish
 
 Run `scripts/verify.sh` (ruff, then the full pytest suite). Report its output; never change a
-check to make it pass.
+check to make it pass. From Claude Code, the `scaffold:navigating` skill's `verify.py` runs the
+same script.
 
 ## Commits
 
@@ -64,3 +99,7 @@ Implementers do not commit.
 
 No home paths, usernames, emails, transcripts or data from other repositories in tracked files.
 Logs, round records and handoffs live under `.claude/`, which is ignored.
+
+Before a commit, scan what it adds; no output means clean:
+
+    git diff --cached -U0 | grep '^+' | grep -nE "/home/|$USER|$(git config user.email)"
