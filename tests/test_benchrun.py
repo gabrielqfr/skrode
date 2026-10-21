@@ -8,6 +8,8 @@ import pytest
 
 from skrode.benchrun import (
     FLASH_URL,
+    HAIKU,
+    OPUS,
     RESULTS_HEADER,
     SONNET,
     main,
@@ -128,6 +130,28 @@ def test_subagent_row_defines_a_haiku_implementer(bench):
     agents = json.loads(after(argv, "--agents"))
     assert agents["implementer"]["model"] == "haiku"
     assert "Agent" in argv[argv.index("--allowedTools") + 1:]
+    assert after(argv, "--model") == SONNET
+
+
+def test_haiku_row_runs_haiku_alone_on_the_plain_prompt(bench):
+    sonnet, _ = command(bench, "claude-sonnet")
+    argv, env = command(bench, "claude-haiku")
+    assert after(argv, "--model") == HAIKU
+    assert "--agents" not in argv
+    assert argv[:3] == sonnet[:3]
+    assert argv[argv.index("--allowedTools") + 1:] == sonnet[sonnet.index("--allowedTools") + 1:]
+    assert env == {}
+
+
+def test_opus_subagent_row_is_the_subagent_row_under_opus(bench):
+    haiku_sub, _ = command(bench, "claude-haiku-subagent")
+    argv, env = command(bench, "claude-opus-haiku-subagent")
+    assert after(argv, "--model") == OPUS
+    assert json.loads(after(argv, "--agents"))["implementer"]["model"] == "haiku"
+    assert argv[:3] == haiku_sub[:3]
+    tools = argv[argv.index("--allowedTools") + 1:]
+    assert tools == haiku_sub[haiku_sub.index("--allowedTools") + 1:]
+    assert env == {}
 
 
 def test_router_row_writes_an_mcp_config(bench):

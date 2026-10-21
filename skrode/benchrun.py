@@ -24,8 +24,12 @@ ROWS = (
     "router-flash",
     "claude-sonnet",
     "claude-haiku-subagent",
+    "claude-haiku",
+    "claude-opus-haiku-subagent",
 )
 SONNET = "claude-sonnet-5-5"
+HAIKU = "claude-haiku-5-5"
+OPUS = "claude-opus-5-5"
 FLASH_URL = "http://127.0.0.1:8091/bench"
 CHECK_TIMEOUT_S = 900
 KILL_GRACE_S = 10
@@ -81,7 +85,11 @@ def read_manifest(prep: Path) -> list[dict[str, str]]:
 
 
 def claude_command(
-    prompt: str, budget_usd: float, extra: list[str], tools: tuple[str, ...]
+    prompt: str,
+    budget_usd: float,
+    extra: list[str],
+    tools: tuple[str, ...],
+    model: str = SONNET,
 ) -> list[str]:
     """Claude argv for a prompt; --allowedTools goes last so it takes the rest."""
     argv = [
@@ -89,7 +97,7 @@ def claude_command(
         "-p",
         prompt,
         "--model",
-        SONNET,
+        model,
         "--output-format",
         "stream-json",
         "--verbose",
@@ -127,13 +135,16 @@ def row_command(
         )
     if row == "claude-sonnet":
         return claude_command(PLAIN_PROMPT, budget_usd, [], CLAUDE_TOOLS), {}
-    if row == "claude-haiku-subagent":
+    if row == "claude-haiku":
+        return claude_command(PLAIN_PROMPT, budget_usd, [], CLAUDE_TOOLS, HAIKU), {}
+    if row in ("claude-haiku-subagent", "claude-opus-haiku-subagent"):
         return (
             claude_command(
                 SUBAGENT_PROMPT,
                 budget_usd,
                 ["--agents", json.dumps(IMPLEMENTER_AGENT)],
                 (*CLAUDE_TOOLS, "Agent"),
+                OPUS if row == "claude-opus-haiku-subagent" else SONNET,
             ),
             {},
         )
