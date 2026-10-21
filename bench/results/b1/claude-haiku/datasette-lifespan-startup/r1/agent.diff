@@ -1,0 +1,159 @@
+diff --git a/datasette/app.py b/datasette/app.py
+index c82ea075..0d5f3e0a 100644
+--- a/datasette/app.py
++++ b/datasette/app.py
+@@ -422,6 +422,7 @@ class Datasette:
+         default_deny=False,
+     ):
+         self._startup_invoked = False
++        self._setup_db_done = False
+         self._closed = False
+         assert config_dir is None or isinstance(
+             config_dir, Path
+@@ -455,6 +456,7 @@ class Datasette:
+         self._column_types = {}  # .invoke_startup() will populate this
+         try:
+             self._refresh_schemas_lock = asyncio.Lock()
++            self._startup_lock = asyncio.Lock()
+         except RuntimeError as rex:
+             # Workaround for intermittent test failure, see:
+             # https://github.com/simonw/datasette/issues/1802
+@@ -462,6 +464,7 @@ class Datasette:
+                 loop = asyncio.new_event_loop()
+                 asyncio.set_event_loop(loop)
+                 self._refresh_schemas_lock = asyncio.Lock()
++                self._startup_lock = asyncio.Lock()
+             else:
+                 raise
+         self.crossdb = crossdb
+@@ -771,6 +774,27 @@ class Datasette:
+         """
+         return pm
+ 
++    async def _startup_sequence(self):
++        """
++        Single idempotent entry point for startup, used by AsgiLifespan,
++        AsgiRunOnFirstRequest and `datasette serve`. Runs the immutable database
++        table-count precompute (once) and then invoke_startup().
++        """
++        if self._startup_invoked and self._setup_db_done:
++            return
++        async with self._startup_lock:
++            # Re-check under the lock: another caller may have finished already
++            if self._startup_invoked and self._setup_db_done:
++                return
++            if not self._setup_db_done:
++                # Calculate table counts for immutable databases
++                for database in self.databases.values():
++                    if not database.is_mutable:
++                        await database.table_counts(limit=60 * 60 * 1000)
++                self._setup_db_done = True
++            # A no-op if invoke_startup() has already run
++            await self.invoke_startup()
++
+     async def invoke_startup(self):
+         # This must be called for Datasette to be in a usable state
+         if self._startup_invoked:
+@@ -2807,20 +2831,18 @@ class Datasette:
+         """Returns an ASGI app function that serves the whole of Datasette"""
+         routes = self._routes()
+ 
+-        async def setup_db():
+-            # First time server starts up, calculate table counts for immutable databases
+-            for database in self.databases.values():
+-                if not database.is_mutable:
+-                    await database.table_counts(limit=60 * 60 * 1000)
+-
+         async def _close_on_shutdown():
+             self.close()
+ 
+         asgi = CrossOriginProtectionMiddleware(DatasetteRouter(self, routes), self)
+         if self.setting("trace_debug"):
+             asgi = AsgiTracer(asgi)
+-        asgi = AsgiLifespan(asgi, on_shutdown=[_close_on_shutdown])
+-        asgi = AsgiRunOnFirstRequest(asgi, on_startup=[setup_db, self.invoke_startup])
++        asgi = AsgiLifespan(
++            asgi,
++            on_startup=[self._startup_sequence],
++            on_shutdown=[_close_on_shutdown],
++        )
++        asgi = AsgiRunOnFirstRequest(asgi, on_startup=[self._startup_sequence])
+         for wrapper in pm.hook.asgi_wrapper(datasette=self):
+             asgi = wrapper(asgi)
+         return asgi
+diff --git a/datasette/cli.py b/datasette/cli.py
+index 12024a14..e8239841 100644
+--- a/datasette/cli.py
++++ b/datasette/cli.py
+@@ -710,9 +710,9 @@ def serve(
+         # Populate internal catalog tables before invoke_startup
+         await check_databases(ds)
+ 
+-        # Run the "startup" plugin hooks
++        # Run startup: the same entry point the ASGI wrappers use
+         try:
+-            await ds.invoke_startup()
++            await ds._startup_sequence()
+         except StartupError as e:
+             raise click.ClickException(e.args[0])
+ 
+diff --git a/datasette/utils/asgi.py b/datasette/utils/asgi.py
+index 812194fd..107609fe 100644
+--- a/datasette/utils/asgi.py
++++ b/datasette/utils/asgi.py
+@@ -1,3 +1,4 @@
++import asyncio
+ import json
+ import re
+ from http.cookies import Morsel, SimpleCookie
+@@ -300,12 +301,24 @@ class AsgiLifespan:
+             while True:
+                 message = await receive()
+                 if message["type"] == "lifespan.startup":
+-                    for fn in self.on_startup:
+-                        await fn()
++                    try:
++                        for fn in self.on_startup:
++                            await fn()
++                    except Exception as e:
++                        await send(
++                            {"type": "lifespan.startup.failed", "message": str(e)}
++                        )
++                        return
+                     await send({"type": "lifespan.startup.complete"})
+                 elif message["type"] == "lifespan.shutdown":
+-                    for fn in self.on_shutdown:
+-                        await fn()
++                    try:
++                        for fn in self.on_shutdown:
++                            await fn()
++                    except Exception as e:
++                        await send(
++                            {"type": "lifespan.shutdown.failed", "message": str(e)}
++                        )
++                        return
+                     await send({"type": "lifespan.shutdown.complete"})
+                     return
+         else:
+@@ -624,10 +637,18 @@ class AsgiRunOnFirstRequest:
+         self.asgi = asgi
+         self.on_startup = on_startup
+         self._started = False
++        self._lock = asyncio.Lock()
+ 
+     async def __call__(self, scope, receive, send):
++        # Lifespan is handled by AsgiLifespan (which reports startup failures),
++        # so don't run the hooks here for lifespan scopes
++        if scope["type"] == "lifespan":
++            return await self.asgi(scope, receive, send)
+         if not self._started:
+-            self._started = True
+-            for hook in self.on_startup:
+-                await hook()
++            async with self._lock:
++                # Re-check: a concurrent request may have finished startup
++                if not self._started:
++                    for hook in self.on_startup:
++                        await hook()
++                    self._started = True
+         return await self.asgi(scope, receive, send)

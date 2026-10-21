@@ -19,19 +19,24 @@ BATCHES = (
     ("b4", "Smaller", "18 tasks"),
 )
 ROWS = (
-    ("claude-haiku-subagent", "Haiku 5.5 subagent"),
+    ("claude-haiku-subagent", "Sonnet + Haiku 5.5 subagent"),
     ("router-flash", "skrode + DeepSeek V4.1 Flash"),
     ("router-bonsai", "skrode + Bonsai 2 27B (local GPU)"),
+    ("claude-haiku", "Haiku 5.5 alone"),
+    ("claude-opus-haiku-subagent", "Opus 5.5 + Haiku 5.5 subagent"),
 )
-# Categorical slots 1-3 of the dataviz reference palette, validated for these surfaces.
+# Categorical slots 1-5 of the dataviz reference palette, validated for these surfaces. Rows
+# added later take the next slot so the earlier rows keep their colours.
 THEMES = {
     "light": {
         "surface": "#fcfcfb", "ink": "#0b0b0b", "ink2": "#52514e", "muted": "#898781",
-        "grid": "#e1e0d9", "axis": "#c3c2b7", "series": ("#2a78d6", "#eb6834", "#1baf7a"),
+        "grid": "#e1e0d9", "axis": "#c3c2b7",
+        "series": ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"),
     },
     "dark": {
         "surface": "#1a1a19", "ink": "#f0efec", "ink2": "#c3c2b7", "muted": "#898781",
-        "grid": "#2c2c2a", "axis": "#383835", "series": ("#3987e5", "#d95926", "#199e70"),
+        "grid": "#2c2c2a", "axis": "#383835",
+        "series": ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"),
     },
 }
 WIDTH = 760
@@ -91,8 +96,19 @@ def render(shares: dict[str, dict[str, float]], theme: dict) -> str:
     zero = (PLOT_LEFT + PLOT_RIGHT) / 2
     scale = (PLOT_RIGHT - zero) / limit
 
+    # Legend entries wrap to a new line at the right edge; the plot starts below the last one.
+    legend, x, ly = [], 24.0, 70
+    for (_, label), colour in zip(ROWS, theme["series"], strict=True):
+        width = 18 + 7.2 * len(label) + 22
+        if x + width - 22 > WIDTH - 24:
+            x, ly = 24.0, ly + 22
+        legend.append(f'<rect x="{x:.1f}" y="{ly}" width="12" height="12" rx="2" fill="{colour}"/>')
+        legend.append(_text(x + 18, ly + 10.5, label, theme["ink2"]))
+        x += width
+    top = TOP + ly - 70
+
     group_h = len(ROWS) * BAR + (len(ROWS) - 1) * BAR_GAP
-    plot_bottom = TOP + len(BATCHES) * group_h + (len(BATCHES) - 1) * GROUP_GAP
+    plot_bottom = top + len(BATCHES) * group_h + (len(BATCHES) - 1) * GROUP_GAP
     height = plot_bottom + 62
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" '
@@ -109,20 +125,15 @@ def render(shares: dict[str, dict[str, float]], theme: dict) -> str:
         ) + ".</desc>",
         f'<rect width="{WIDTH}" height="{height}" fill="{theme["surface"]}"/>',
         _text(24, 32, "Claude spend saved vs Sonnet 5.5 alone", theme["ink"], 16, weight=600),
-        _text(24, 52, "Sonnet orchestrates every row. Median a run, as a share of Sonnet's "
-              "median cost on the same batch", theme["ink2"]),
+        _text(24, 52, "Median a run, as a share of Sonnet's median cost on the same batch. "
+              "Sonnet orchestrates the skrode rows", theme["ink2"]),
+        *legend,
     ]
-
-    x = 24.0
-    for (_, label), colour in zip(ROWS, theme["series"], strict=True):
-        out.append(f'<rect x="{x:.1f}" y="70" width="12" height="12" rx="2" fill="{colour}"/>')
-        out.append(_text(x + 18, 80.5, label, theme["ink2"]))
-        x += 18 + 7.2 * len(label) + 22
 
     for tick in range(-limit, limit + 1, TICK_STEP):
         tx = zero + tick * scale
         stroke = theme["axis"] if tick == 0 else theme["grid"]
-        out.append(f'<line x1="{tx:.1f}" y1="{TOP - 8}" x2="{tx:.1f}" y2="{plot_bottom + 8}" '
+        out.append(f'<line x1="{tx:.1f}" y1="{top - 8}" x2="{tx:.1f}" y2="{plot_bottom + 8}" '
                    f'stroke="{stroke}" stroke-width="1"/>')
         out.append(_text(tx, plot_bottom + 24, _percent(tick / 100), theme["muted"], 12,
                          "middle"))
@@ -130,7 +141,7 @@ def render(shares: dict[str, dict[str, float]], theme: dict) -> str:
                      "end"))
     out.append(_text(zero + 8, plot_bottom + 44, "saved Claude spend →", theme["muted"], 12))
 
-    y = float(TOP)
+    y = float(top)
     for batch, label, tasks in BATCHES:
         mid = y + group_h / 2
         out.append(_text(24, mid - 2, label, theme["ink"], weight=600))

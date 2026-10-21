@@ -1,0 +1,570 @@
+diff --git a/src/tox/config/loader/api.py b/src/tox/config/loader/api.py
+index 91cfe9ac..d2b37c90 100644
+--- a/src/tox/config/loader/api.py
++++ b/src/tox/config/loader/api.py
+@@ -18,6 +18,7 @@ if TYPE_CHECKING:
+ 
+     from tox.config.cli.parser import ToxParser
+     from tox.config.main import Config
++    from tox.config.set_env import SetEnvRaw, SetEnvReference
+ 
+     from .section import Section
+ 
+@@ -186,22 +187,15 @@ class Loader(Convert[T]):
+             if not overrides:
+                 raise KeyError(key)
+ 
+-        delay_replace = inspect.isclass(of_type) and issubclass(of_type, SetEnv)
+         for entry in overrides:
+-            # an override arrives as a raw CLI string, so it has not been through the loader's substitution pass yet
+-            raw_override = (
+-                entry.value
+-                if delay_replace or conf is None  # set_env expands later, the CLI config file never does
+-                else self.substitute(entry.value, conf, args)
+-            )
+-            converted_override = _STR_CONVERT.to(raw_override, of_type, factory)
++            converted_override = self._build_override(entry, of_type, factory, conf, args)
+             if entry.append and converted is not None:
+                 if isinstance(converted, list) and isinstance(converted_override, list):
+                     converted += converted_override
+                 elif isinstance(converted, dict) and isinstance(converted_override, dict):
+                     converted.update(converted_override)
+                 elif isinstance(converted, SetEnv) and isinstance(converted_override, SetEnv):
+-                    converted.update(converted_override, override=True)
++                    converted.extend(converted_override)
+                 elif isinstance(converted, PythonDeps) and isinstance(converted_override, PythonDeps):
+                     converted += converted_override
+                 else:
+@@ -212,6 +206,50 @@ class Loader(Convert[T]):
+ 
+         return cast("V", converted)  # guaranteed non-None: either build() succeeded or overrides set it
+ 
++    def _build_override(  # ruff:ignore[too-many-arguments]
++        self,
++        entry: Override,
++        of_type: type[V] | UnionType,
++        factory: Factory[V],
++        conf: Config | None,
++        args: ConfigLoadArgs,
++    ) -> V:
++        from tox.config.set_env import SetEnv  # ruff:ignore[import-outside-top-level]
++
++        if conf is not None and inspect.isclass(of_type) and issubclass(of_type, SetEnv):
++            # set_env is built like a value from the file, its substitution is applied lazily when read
++            return self.build(entry.key, of_type, factory, conf, entry.value, args)
++        # an override arrives as a raw CLI string, so it has not been through the loader's substitution pass yet
++        raw_override = entry.value if conf is None else self.substitute(entry.value, conf, args)
++        return _STR_CONVERT.to(raw_override, of_type, factory)
++
++    def set_env_reference(
++        self,
++        raw: Any,
++        overrides: list[Override],
++        conf: Config,
++        args: ConfigLoadArgs,
++    ) -> SetEnvReference:
++        """Build a referenced ``set_env`` together with the overrides that target it."""
++        from tox.config.set_env import SetEnv, SetEnvReference  # ruff:ignore[import-outside-top-level]
++
++        if args.chain[-1] in args.chain[:-1]:
++            msg = f"circular set_env reference {' -> '.join(args.chain)}"
++            raise ValueError(msg)
++
++        def factory(value: SetEnvRaw) -> SetEnv:
++            return SetEnv(value, "set_env", args.env_name, conf.core["tox_root"])
++
++        result = self.build("set_env", SetEnv, factory, conf, raw, args)
++        shape = result.shape
++        for entry in overrides:
++            override = self._build_override(entry, SetEnv, factory, conf, args)
++            if entry.append:
++                result.extend(override)
++            else:
++                result = override
++        return SetEnvReference(result, args, shape)
++
+     def build(  # ruff:ignore[too-many-arguments]
+         self,
+         key: str,  # ruff:ignore[unused-method-argument]
+diff --git a/src/tox/config/loader/ini/replace.py b/src/tox/config/loader/ini/replace.py
+index b009e9ec..f9e8b219 100644
+--- a/src/tox/config/loader/ini/replace.py
++++ b/src/tox/config/loader/ini/replace.py
+@@ -51,7 +51,7 @@ class ReplaceReferenceIni(ReplaceReference):
+         for src in self._config_value_sources(settings["env"], settings["section"], conf_args.env_name):
+             try:
+                 if isinstance(src, SectionProxy):
+-                    return self._resolve_section_proxy(src, key, conf_args.env_name)
++                    return self._resolve_section_proxy(src, key, conf_args)
+                 value = src.load(key, conf_args.chain)
+             except KeyError:  # if fails, keep trying maybe another source can satisfy # ruff:ignore[try-except-in-loop]
+                 pass
+@@ -60,18 +60,36 @@ class ReplaceReferenceIni(ReplaceReference):
+                 return as_str.replace("#", r"\#")  # escape comment characters as these will be stripped
+         raise KeyError(key)
+ 
+-    def _resolve_section_proxy(self, src: SectionProxy, key: str, env_name: str | None) -> str:
++    def _resolve_section_proxy(self, src: SectionProxy, key: str, args: ConfigLoadArgs) -> str:
+         """Resolve a key from a SectionProxy, returning empty string when factor filtering empties the value."""
+-        raw = apply_overrides_to_raw(self.conf.overrides.get(src.name, []), key, src[key])
++        keys = _SET_ENV_KEYS if key in _SET_ENV_KEYS else {key}
++        overrides = [entry for entry in self.conf.overrides.get(src.name, []) if entry.key in keys]
++        value = src[key]  # a missing key propagates so the caller can try its next source
++        is_set_env = key in _SET_ENV_KEYS and bool(overrides)
++        # with a set_env override the parsed set_env keeps its lazy values until the consumer reads them
++        raw = value if is_set_env else apply_overrides_to_raw(overrides, key, value)
+         try:
+-            return self.loader.process_raw(self.conf, env_name, raw)
++            processed = self.loader.process_raw(self.conf, args.env_name, raw)
+         except KeyError:
+-            if key in src:
+-                # Key exists but factor filtering emptied the value.
+-                # For cross-section references this is a valid empty result,
+-                # not a missing key — the caller explicitly asked for this value.
++            # Key exists but factor filtering emptied the value.
++            # For cross-section references this is a valid empty result,
++            # not a missing key — the caller explicitly asked for this value.
++            if not is_set_env:
+                 return ""
+-            raise
++            processed = ""  # an emptied set_env still takes the overrides applied to it
++        if not is_set_env:
++            return processed
++        args = args.copy()
++        args.chain.append(f"{src.name}.{key}")
++        config = self.loader.set_env_reference(processed, overrides, self.conf, args).config.raw(args)
++        lines: list[str] = []
++        for name, entry in config.items():
++            escaped = entry["value"].replace(";", "\\;")
++            line = f"{name}={escaped}"
++            if marker := entry.get("marker"):
++                line += f"; {marker}"
++            lines.append(line)
++        return "\n".join(lines)
+ 
+     def _config_value_sources(
+         self, env: str | None, section: str | None, current_env: str | None
+@@ -98,6 +116,9 @@ class ReplaceReferenceIni(ReplaceReference):
+             yield self.conf.get_env(env)
+ 
+ 
++_SET_ENV_KEYS = frozenset({"set_env", "setenv"})
++
++
+ @cache
+ def _replace_ref(env: str | None) -> Pattern[str]:
+     return re.compile(
+diff --git a/src/tox/config/loader/toml/_api.py b/src/tox/config/loader/toml/_api.py
+index f23f7c03..0e084621 100644
+--- a/src/tox/config/loader/toml/_api.py
++++ b/src/tox/config/loader/toml/_api.py
+@@ -2,10 +2,12 @@ from __future__ import annotations
+ 
+ from typing import TYPE_CHECKING
+ 
++from tox.config.set_env import SetEnvReference
++
+ if TYPE_CHECKING:
+     from typing import TypeAlias
+ 
+-TomlTypes: TypeAlias = dict[str, "TomlTypes"] | list["TomlTypes"] | str | int | float | bool | None
++TomlTypes: TypeAlias = dict[str, "TomlTypes"] | list["TomlTypes"] | str | int | float | bool | None | SetEnvReference
+ 
+ __all__ = [
+     "TomlTypes",
+diff --git a/src/tox/config/loader/toml/_replace.py b/src/tox/config/loader/toml/_replace.py
+index 840cf6d6..03a37e4f 100644
+--- a/src/tox/config/loader/toml/_replace.py
++++ b/src/tox/config/loader/toml/_replace.py
+@@ -24,6 +24,7 @@ from tox.config.loader.replacer import (
+     replace_env,
+ )
+ from tox.config.loader.stringify import stringify
++from tox.config.set_env import SetEnvReference
+ from tox.config.types import Command
+ from tox.tox_env.python.pip.req_file import PythonConstraints, PythonDeps
+ from tox.util.typing_compat import override
+@@ -81,7 +82,14 @@ class Unroll:
+             res_list: list[TomlTypes] = []
+             for val in value:  # apply replacement for every entry
+                 got = self(val, depth, skip_str=skip_str)
+-                if isinstance(val, dict) and val.get("replace") and val.get("extend"):
++                if isinstance(got, SetEnvReference):
++                    # a set_env reference spreads its table (or array, when extended) into the parent list
++                    extends = isinstance(val, dict) and bool(val.get("extend"))
++                    if got.shape != ("array" if extends else "table"):
++                        msg = "set_env arrays require table references or array references with extend=true"
++                        raise TypeError(msg)
++                    res_list.append(got)
++                elif isinstance(val, dict) and val.get("replace") and val.get("extend"):
+                     # ``extend`` spreads an iterable result (list, set of extras, ...) into the
+                     # parent. A scalar string is the exception: iterating it would split it
+                     # character by character, so a non-empty one is appended as a single item while
+@@ -153,7 +161,15 @@ class Unroll:
+             if self.conf is not None:
+                 *namespace_parts, ref_key = validated_of
+                 namespace = self.loader.section.SEP.join(namespace_parts)
+-                loaded = apply_overrides_to_raw(self.conf.overrides.get(namespace, []), ref_key, loaded)
++                overrides = self.conf.overrides.get(namespace, [])
++                set_env_overrides = [o for o in overrides if o.key in _SET_ENV_KEYS]
++                if skip_str and ref_key in _SET_ENV_KEYS and set_env_overrides:
++                    # the referenced set_env keeps its lazy values, so the overrides are applied to it lazily as well
++                    args = self.args.copy()
++                    args.chain.append(path)
++                    loaded = self.loader.set_env_reference(loaded, set_env_overrides, self.conf, args)
++                else:
++                    loaded = apply_overrides_to_raw(overrides, ref_key, loaded)
+             self._refs.append(path)
+             try:
+                 return self(loaded, depth, skip_str=skip_str)
+@@ -162,6 +178,9 @@ class Unroll:
+         return value
+ 
+ 
++_SET_ENV_KEYS = frozenset({"set_env", "setenv"})
++
++
+ def _env_expression(name: str, default: str) -> str:
+     """Write an ``env`` table as the ``{env:NAME:DEFAULT}`` string that resolves to the same value."""
+     escaped_name = "".join(f"\\{char}" if char in BACKSLASH_ESCAPE_CHARS else char for char in name)
+diff --git a/src/tox/config/set_env.py b/src/tox/config/set_env.py
+index 4f56b417..35a64262 100644
+--- a/src/tox/config/set_env.py
++++ b/src/tox/config/set_env.py
+@@ -1,9 +1,10 @@
+ from __future__ import annotations
+ 
+ import sys
++from dataclasses import dataclass
+ from itertools import chain
+ from pathlib import Path
+-from typing import TYPE_CHECKING, Protocol
++from typing import TYPE_CHECKING, Literal, Protocol, final
+ 
+ from packaging.markers import Marker
+ 
+@@ -31,7 +32,22 @@ class SetEnvEntry(TypedDict):
+     marker: NotRequired[str]
+ 
+ 
+-SetEnvRaw = str | dict[str, "str | SetEnvEntry"] | list[dict[str, "str | SetEnvEntry"]]
++@final
++@dataclass(frozen=True)
++class SetEnvReference:
++    """Keep overrides pending until the consuming environment has registered its keys."""
++
++    config: SetEnv
++    args: ConfigLoadArgs
++    shape: Literal["string", "table", "array"]
++
++
++SetEnvRaw = (
++    str
++    | dict[str, "str | SetEnvEntry"]
++    | SetEnvReference
++    | list[dict[str, "str | SetEnvEntry"] | SetEnvReference]
++)
+ 
+ 
+ class SetEnv:
+@@ -45,20 +61,30 @@ class SetEnv:
+         self._defined_keys: set[str] = set()  # keys explicitly defined during parsing (survives load() draining _raw)
+         self._markers: dict[str, Marker] = {}  # PEP-496 markers for conditional env vars
+         self._needs_replacement: list[str] = []  # env vars that need replacement
++        self._overrides: list[tuple[SetEnv, set[str]]] = []  # queued override blocks, each with its protected keys
++        self._reference_entries: list[dict[str, str | SetEnvEntry] | SetEnvReference] = []  # ordered list entries
++        self._override_keys: set[str] = set()  # keys assigned directly by an override
+         self._expanding = False
+         self._env_files: list[tuple[str, set[str]]] = []
+         self._replacer: Replacer = lambda s, c, *, recursive=True: s  # ruff:ignore[unused-lambda-argument]
+         self._name, self._env_name, self._root = name, env_name, root
++        self._args = ConfigLoadArgs([], name, env_name)
+         from .loader.replacer import MatchExpression, find_replace_expr  # ruff:ignore[import-outside-top-level]
+ 
++        if isinstance(raw, SetEnvReference):
++            self.shape = raw.shape
++            self._reference_entries = [raw]
++            self._parse_dict(raw.config.raw(raw.args, resolve=False).items())
++            return
+         if isinstance(raw, dict):
++            self.shape = "table"
+             self._parse_dict(raw.items())
+             return
+         if isinstance(raw, list):
+-            # stream the entries in order rather than merging them into a dict first: a dict keeps only the last
+-            # ``file`` entry and pulls a repeated key back to its first position, both of which change the meaning
+-            self._parse_dict(chain.from_iterable(entry.items() for entry in raw))
++            self.shape = "array"
++            self._parse_list(raw)
+             return
++        self.shape = "string"
+         keys_after_file: set[str] = set()
+         for line in raw.splitlines():  # ruff:ignore[too-many-nested-blocks]
+             if line.strip():
+@@ -90,6 +116,21 @@ class SetEnv:
+                         else:
+                             self._markers.pop(key, None)
+ 
++    def _parse_list(self, raw: list[dict[str, str | SetEnvEntry] | SetEnvReference]) -> None:
++        if not any(isinstance(entry, SetEnvReference) for entry in raw):
++            # stream the entries in order rather than merging them into a dict first: a dict keeps only the last
++            # ``file`` entry and pulls a repeated key back to its first position, both of which change the meaning
++            self._parse_dict(chain.from_iterable(entry.items() for entry in raw if isinstance(entry, dict)))
++            return
++        self._reference_entries = list(raw)
++        for entry in raw:
++            if isinstance(entry, SetEnvReference):
++                items: Iterable[tuple[str, str | SetEnvEntry]] = entry.config.raw(entry.args, resolve=False).items()
++            else:
++                items = entry.items()
++            # file strings are read later, in order, once the consuming environment has registered its keys
++            self._parse_dict(item for item in items if not (item[0] == "file" and isinstance(item[1], str)))
++
+     def _parse_dict(self, raw: Iterable[tuple[str, str | SetEnvEntry]]) -> None:
+         keys_after_file: set[str] = set()
+         for key, value in raw:
+@@ -125,11 +166,17 @@ class SetEnv:
+ 
+     def use_replacer(self, value: Replacer, args: ConfigLoadArgs) -> None:
+         self._replacer = value
++        self._args = args.copy()
++
++    def _resolve_files(self, args: ConfigLoadArgs) -> None:
+         for filename, keys_after in self._env_files:
+             for key, val in self._stream_env_file(filename, args):
+-                if key not in keys_after:
+-                    self._raw[key] = val
+-                    self._markers.pop(key, None)
++                if key in keys_after or key in self._override_keys or key in self._exported:
++                    continue
++                self._raw[key] = val
++                self._materialized.pop(key, None)
++                self._markers.pop(key, None)
++        self._env_files.clear()
+ 
+     def _stream_env_file(self, filename: str, args: ConfigLoadArgs) -> Iterator[tuple[str, str]]:
+         # Our rules in the documentation, some upstream environment file rules (we follow mostly the docker one):
+@@ -152,7 +199,7 @@ class SetEnv:
+         key, sep, value = line.partition("=")
+         if not sep:
+             msg = f"invalid line {line!r} in set_env"
+-            raise ValueError(msg)
++            raise Fail(msg)
+         return key.strip(), value.strip()
+ 
+     @staticmethod
+@@ -189,10 +236,11 @@ class SetEnv:
+         return value.replace("\\;", ";"), ""
+ 
+     def load(self, item: str, args: ConfigLoadArgs | None = None) -> str:
++        self._resolve_replacements()
+         if item in self._materialized:
+             return self._materialized[item]
+         if item in self._exported:
+-            self._materialized[item] = self._exported.pop(item)()
++            self._materialized[item] = self._exported[item]()
+             return self._materialized[item]
+         raw = self._raw[item]
+         args = ConfigLoadArgs([], self._name, self._env_name) if args is None else args
+@@ -208,42 +256,82 @@ class SetEnv:
+         return isinstance(item, str) and item in iter(self)
+ 
+     def __iter__(self) -> Iterator[str]:
++        self._resolve_replacements()
+         # start with the materialized ones, maybe we don't need to materialize the raw ones
+-        for key in self._materialized:
++        materialized = list(self._materialized)
++        for key in materialized:
+             if self._marker_matches(key):
+                 yield key
+-        yield from list(self._exported)
+-        for key in list(self._raw.keys()):  # iterating over this may trigger materialization and change the dict
++        for key in list(self._exported):  # a callback may materialize another export while we iterate
++            if key not in materialized:
++                yield key
++        for key in list(self._raw):  # iterating over this may trigger materialization and change the dict
+             if self._marker_matches(key):
+                 yield key
+-        yield from self._iter_needs_replacement()
+ 
+-    def _iter_needs_replacement(self) -> Iterator[str]:
+-        if self._expanding:  # a lookup made while expanding sees only the keys registered so far
+-            return
+-        args = ConfigLoadArgs([], self._name, self._env_name)
++    def _resolve_replacements(self, args: ConfigLoadArgs | None = None) -> None:
++        if self._expanding or not (
++            self._env_files or self._needs_replacement or self._overrides or self._reference_entries
++        ):
++            return  # a lookup made while expanding sees only the keys registered so far
++        args = self._args.copy() if args is None else args
+         entries: dict[str, tuple[str, Marker | None]] = {}
+         self._expanding = True
+         try:
++            self._resolve_files(args)
+             for line in self._needs_replacement:
+                 entries.update(self._expand(line, (), args))
++            for key in [key for key in entries if key in self._raw or key in self._defined_keys]:
++                del entries[key]
++            for index, entry in enumerate(self._reference_entries):
++                protected = set(self._override_keys)
++                for later in self._reference_entries[index + 1 :]:
++                    protected |= self._direct_keys(later)
++                if isinstance(entry, SetEnvReference):
++                    resolved = entry.config.raw(entry.args)
++                else:
++                    table = SetEnv(entry, self._name, self._env_name, self._root)
++                    table.use_replacer(self._replacer, args)
++                    resolved = table.raw(args)
++                part = self._entries_from(resolved, protected)
++                entries.update(part)
++                self._merge_entries(part)
++            for block, protected in self._overrides:
++                part = self._entries_from(block.raw(args), protected)
++                entries.update(part)
++                self._merge_entries(part)
+         finally:
+             self._expanding = False
+         self._needs_replacement.clear()
+-        sub_raw: dict[str, str] = {}
+-        for key, (value, marker) in entries.items():
+-            if key not in self._raw and key not in self._defined_keys and key not in self._exported:
+-                sub_raw[key] = value
+-                if marker is None:
+-                    self._markers.pop(key, None)
+-                else:
+-                    self._markers[key] = marker
+-        self._materialized = {k: v for k, v in self._materialized.items() if k not in sub_raw}
+-        self._raw.update(sub_raw)
++        self._overrides.clear()
++        self._reference_entries.clear()
++        self._merge_entries(entries)
+         self.changed = True  # loading while iterating can cause these values to be missed
+-        for key in sub_raw:
+-            if self._marker_matches(key):
+-                yield key
++
++    @staticmethod
++    def _direct_keys(entry: dict[str, str | SetEnvEntry] | SetEnvReference) -> set[str]:
++        if isinstance(entry, SetEnvReference):
++            return set(entry.config.raw(entry.args, resolve=False))
++        return {key for key, value in entry.items() if not (key == "file" and isinstance(value, str))}
++
++    @staticmethod
++    def _entries_from(resolved: dict[str, SetEnvEntry], protected: set[str]) -> dict[str, tuple[str, Marker | None]]:
++        return {
++            key: (entry["value"], Marker(entry["marker"]) if "marker" in entry else None)
++            for key, entry in resolved.items()
++            if key not in protected
++        }
++
++    def _merge_entries(self, entries: Mapping[str, tuple[str, Marker | None]]) -> None:
++        for key, (value, marker) in entries.items():
++            if key in self._exported:
++                continue
++            self._raw[key] = value
++            if marker is None:
++                self._markers.pop(key, None)
++            else:
++                self._markers[key] = marker
++            self._materialized.pop(key, None)
+ 
+     def _expand(
+         self, line: str, parents: tuple[str, ...], args: ConfigLoadArgs
+@@ -257,6 +345,7 @@ class SetEnv:
+             return {key: (value, Marker(marker) if marker else None)}
+         block = SetEnv(text, self._name, self._env_name, self._root, substituted=True)
+         block.use_replacer(self._replacer, args)
++        block._resolve_files(args)
+         entries: dict[str, tuple[str, Marker | None]] = {}
+         for nested in block._needs_replacement:  # the block's own lines win over what it pulls in
+             entries.update(self._expand(nested, (*parents, line), args))
+@@ -272,9 +361,39 @@ class SetEnv:
+         for key, value in values.items():
+             self._raw.pop(key, None)
+             self._materialized.pop(key, None)
++            self._markers.pop(key, None)
+             self._exported[key] = value
+         self.changed = True
+ 
++    def raw(self, args: ConfigLoadArgs, *, resolve: bool = True) -> dict[str, SetEnvEntry]:
++        """Preserve lazy values and markers when another section includes this configuration."""
++        if resolve:
++            self._resolve_replacements(args)
++        result: dict[str, SetEnvEntry] = {}
++        for key, value in chain(self._materialized.items(), self._raw.items()):  # raw wins
++            entry: SetEnvEntry = {"value": value}
++            if key in self._markers:
++                entry["marker"] = str(self._markers[key])
++            result[key] = entry
++        return result
++
++    def extend(self, other: SetEnv) -> None:
++        """Appended blocks override base keys; explicit keys in the same override win."""
++        keys = set(other._raw)
++        self._overrides = [(block, protected | keys) for block, protected in self._overrides]
++        self._override_keys |= keys
++        for key, value in other._raw.items():
++            self._raw[key] = value
++            self._materialized.pop(key, None)
++            self._defined_keys.add(key)
++            if key in other._markers:
++                self._markers[key] = other._markers[key]
++            else:
++                self._markers.pop(key, None)
++        if other._env_files or other._needs_replacement or other._reference_entries:
++            self._overrides.append((other, set()))
++        self.changed = True
++
+     def update(self, param: Mapping[str, str] | SetEnv, *, override: bool = True) -> None:
+         for key in param:
+             # do not override something already set explicitly
+@@ -288,4 +407,5 @@ __all__ = (
+     "SetEnv",
+     "SetEnvEntry",
+     "SetEnvRaw",
++    "SetEnvReference",
+ )
+diff --git a/src/tox/config/sets.py b/src/tox/config/sets.py
+index ea1a8fd6..c1ef7b88 100644
+--- a/src/tox/config/sets.py
++++ b/src/tox/config/sets.py
+@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast, get_origin, overload
+ from tox.util.typing_compat import override
+ 
+ from .of_type import ConfigConstantDefinition, ConfigDefinition, ConfigDynamicDefinition, ConfigLoadArgs
+-from .set_env import SetEnv, SetEnvRaw
++from .set_env import SetEnv, SetEnvRaw, SetEnvReference
+ from .types import EnvList
+ 
+ if TYPE_CHECKING:
+@@ -370,8 +370,7 @@ class EnvConfigSet(ConfigSet):
+     def register_config(self) -> None:
+         def set_env_post_process(values: SetEnv) -> SetEnv:
+             values.update(self.default_set_env_loader(), override=False)
+-            values.update({"PYTHONIOENCODING": "utf-8"}, override=True)
+-            values.export(self.exported_set_env_loader())
++            values.export({"PYTHONIOENCODING": lambda: "utf-8", **self.exported_set_env_loader()})
+             return values
+ 
+         def set_env_factory(raw: object) -> SetEnv:
+@@ -382,15 +381,15 @@ class EnvConfigSet(ConfigSet):
+                     return "value" in v and isinstance(v.get("value"), str)
+                 return False
+ 
++            def is_valid_table(e: object) -> bool:
++                return isinstance(e, dict) and all(isinstance(k, str) and is_valid_value(v) for k, v in e.items())
++
+             if not (
+-                isinstance(raw, str)
++                isinstance(raw, (str, SetEnvReference))
+                 or (isinstance(raw, dict) and all(isinstance(k, str) and is_valid_value(v) for k, v in raw.items()))
+                 or (
+                     isinstance(raw, list)
+-                    and all(
+-                        isinstance(e, dict) and all(isinstance(k, str) and is_valid_value(v) for k, v in e.items())
+-                        for e in raw
+-                    )
++                    and all(isinstance(e, SetEnvReference) or is_valid_table(e) for e in raw)
+                 )
+             ):
+                 msg = (

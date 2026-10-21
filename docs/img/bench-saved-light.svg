@@ -1,56 +1,74 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="392" viewBox="0 0 760 392" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="534" viewBox="0 0 760 534" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="title">Claude spend saved vs Sonnet alone, by batch</title>
-<desc id="desc">Connected: Haiku 5.5 subagent +24%, skrode + DeepSeek V4.1 Flash +15%, skrode + Bonsai 2 27B (local GPU) −1%; Harder: Haiku 5.5 subagent +55%, skrode + DeepSeek V4.1 Flash −3%, skrode + Bonsai 2 27B (local GPU) −61%; Smaller: Haiku 5.5 subagent +8%, skrode + DeepSeek V4.1 Flash −14%, skrode + Bonsai 2 27B (local GPU) not run.</desc>
-<rect width="760" height="392" fill="#fcfcfb"/>
+<desc id="desc">Connected: Sonnet + Haiku 5.5 subagent +24%, skrode + DeepSeek V4.1 Flash +15%, skrode + Bonsai 2 27B (local GPU) −1%, Haiku 5.5 alone +90%, Opus 5.5 + Haiku 5.5 subagent not run; Harder: Sonnet + Haiku 5.5 subagent +55%, skrode + DeepSeek V4.1 Flash −3%, skrode + Bonsai 2 27B (local GPU) −61%, Haiku 5.5 alone +86%, Opus 5.5 + Haiku 5.5 subagent −2%; Smaller: Sonnet + Haiku 5.5 subagent +8%, skrode + DeepSeek V4.1 Flash −14%, skrode + Bonsai 2 27B (local GPU) not run, Haiku 5.5 alone +91%, Opus 5.5 + Haiku 5.5 subagent not run.</desc>
+<rect width="760" height="534" fill="#fcfcfb"/>
 <text x="24.0" y="32.0" fill="#0b0b0b" font-size="16" font-weight="600" text-anchor="start">Claude spend saved vs Sonnet 5.5 alone</text>
-<text x="24.0" y="52.0" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Sonnet orchestrates every row. Median a run, as a share of Sonnet's median cost on the same batch</text>
+<text x="24.0" y="52.0" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Median a run, as a share of Sonnet's median cost on the same batch. Sonnet orchestrates the skrode rows</text>
 <rect x="24.0" y="70" width="12" height="12" rx="2" fill="#2a78d6"/>
-<text x="42.0" y="80.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Haiku 5.5 subagent</text>
-<rect x="193.6" y="70" width="12" height="12" rx="2" fill="#eb6834"/>
-<text x="211.6" y="80.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">skrode + DeepSeek V4.1 Flash</text>
-<rect x="435.2" y="70" width="12" height="12" rx="2" fill="#1baf7a"/>
-<text x="453.2" y="80.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">skrode + Bonsai 2 27B (local GPU)</text>
-<line x1="180.0" y1="104" x2="180.0" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="180.0" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−80%</text>
-<line x1="249.5" y1="104" x2="249.5" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="249.5" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−60%</text>
-<line x1="319.0" y1="104" x2="319.0" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="319.0" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−40%</text>
-<line x1="388.5" y1="104" x2="388.5" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="388.5" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−20%</text>
-<line x1="458.0" y1="104" x2="458.0" y2="338" stroke="#c3c2b7" stroke-width="1"/>
-<text x="458.0" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">0%</text>
-<line x1="527.5" y1="104" x2="527.5" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="527.5" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+20%</text>
-<line x1="597.0" y1="104" x2="597.0" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="597.0" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+40%</text>
-<line x1="666.5" y1="104" x2="666.5" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="666.5" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+60%</text>
-<line x1="736.0" y1="104" x2="736.0" y2="338" stroke="#e1e0d9" stroke-width="1"/>
-<text x="736.0" y="354.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+80%</text>
-<text x="450.0" y="374.0" fill="#898781" font-size="12" font-weight="400" text-anchor="end">← cost Claude more</text>
-<text x="466.0" y="374.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">saved Claude spend →</text>
-<text x="24.0" y="139.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Connected</text>
-<text x="24.0" y="156.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b1, 5 tasks</text>
-<path d="M458.0,112.0H537.5Q541.5,112.0 541.5,116.0V126.0Q541.5,130.0 537.5,130.0H458.0Z" fill="#2a78d6"/>
-<text x="547.5" y="125.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+24%</text>
-<path d="M458.0,132.0H505.9Q509.9,132.0 509.9,136.0V146.0Q509.9,150.0 505.9,150.0H458.0Z" fill="#eb6834"/>
-<text x="515.9" y="145.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+15%</text>
-<path d="M458.0,152.0H457.5Q453.5,152.0 453.5,156.0V166.0Q453.5,170.0 457.5,170.0H458.0Z" fill="#1baf7a"/>
-<text x="447.5" y="165.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−1%</text>
-<text x="24.0" y="219.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Harder</text>
-<text x="24.0" y="236.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b3, 5 tasks</text>
-<path d="M458.0,192.0H643.9Q647.9,192.0 647.9,196.0V206.0Q647.9,210.0 643.9,210.0H458.0Z" fill="#2a78d6"/>
-<text x="653.9" y="205.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+55%</text>
-<path d="M458.0,212.0H451.7Q447.7,212.0 447.7,216.0V226.0Q447.7,230.0 451.7,230.0H458.0Z" fill="#eb6834"/>
-<text x="441.7" y="225.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−3%</text>
-<path d="M458.0,232.0H250.6Q246.6,232.0 246.6,236.0V246.0Q246.6,250.0 250.6,250.0H458.0Z" fill="#1baf7a"/>
-<text x="240.6" y="245.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−61%</text>
-<text x="24.0" y="299.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Smaller</text>
-<text x="24.0" y="316.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b4, 18 tasks</text>
-<path d="M458.0,272.0H482.6Q486.6,272.0 486.6,276.0V286.0Q486.6,290.0 482.6,290.0H458.0Z" fill="#2a78d6"/>
-<text x="492.6" y="285.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+8%</text>
-<path d="M458.0,292.0H414.0Q410.0,292.0 410.0,296.0V306.0Q410.0,310.0 414.0,310.0H458.0Z" fill="#eb6834"/>
-<text x="404.0" y="305.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−14%</text>
-<text x="466.0" y="325.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<text x="42.0" y="80.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Sonnet + Haiku 5.5 subagent</text>
+<rect x="258.4" y="70" width="12" height="12" rx="2" fill="#eb6834"/>
+<text x="276.4" y="80.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">skrode + DeepSeek V4.1 Flash</text>
+<rect x="24.0" y="92" width="12" height="12" rx="2" fill="#1baf7a"/>
+<text x="42.0" y="102.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">skrode + Bonsai 2 27B (local GPU)</text>
+<rect x="301.6" y="92" width="12" height="12" rx="2" fill="#eda100"/>
+<text x="319.6" y="102.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Haiku 5.5 alone</text>
+<rect x="449.6" y="92" width="12" height="12" rx="2" fill="#e87ba4"/>
+<text x="467.6" y="102.5" fill="#52514e" font-size="13" font-weight="400" text-anchor="start">Opus 5.5 + Haiku 5.5 subagent</text>
+<line x1="180.0" y1="126" x2="180.0" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="180.0" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−100%</text>
+<line x1="235.6" y1="126" x2="235.6" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="235.6" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−80%</text>
+<line x1="291.2" y1="126" x2="291.2" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="291.2" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−60%</text>
+<line x1="346.8" y1="126" x2="346.8" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="346.8" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−40%</text>
+<line x1="402.4" y1="126" x2="402.4" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="402.4" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">−20%</text>
+<line x1="458.0" y1="126" x2="458.0" y2="480" stroke="#c3c2b7" stroke-width="1"/>
+<text x="458.0" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">0%</text>
+<line x1="513.6" y1="126" x2="513.6" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="513.6" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+20%</text>
+<line x1="569.2" y1="126" x2="569.2" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="569.2" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+40%</text>
+<line x1="624.8" y1="126" x2="624.8" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="624.8" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+60%</text>
+<line x1="680.4" y1="126" x2="680.4" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="680.4" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+80%</text>
+<line x1="736.0" y1="126" x2="736.0" y2="480" stroke="#e1e0d9" stroke-width="1"/>
+<text x="736.0" y="496.0" fill="#898781" font-size="12" font-weight="400" text-anchor="middle">+100%</text>
+<text x="450.0" y="516.0" fill="#898781" font-size="12" font-weight="400" text-anchor="end">← cost Claude more</text>
+<text x="466.0" y="516.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">saved Claude spend →</text>
+<text x="24.0" y="181.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Connected</text>
+<text x="24.0" y="198.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b1, 5 tasks</text>
+<path d="M458.0,134.0H520.8Q524.8,134.0 524.8,138.0V148.0Q524.8,152.0 520.8,152.0H458.0Z" fill="#2a78d6"/>
+<text x="530.8" y="147.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+24%</text>
+<path d="M458.0,154.0H495.5Q499.5,154.0 499.5,158.0V168.0Q499.5,172.0 495.5,172.0H458.0Z" fill="#eb6834"/>
+<text x="505.5" y="167.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+15%</text>
+<path d="M458.0,174.0H458.0Q454.4,174.0 454.4,177.6V188.4Q454.4,192.0 458.0,192.0H458.0Z" fill="#1baf7a"/>
+<text x="448.4" y="187.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−1%</text>
+<path d="M458.0,194.0H704.7Q708.7,194.0 708.7,198.0V208.0Q708.7,212.0 704.7,212.0H458.0Z" fill="#eda100"/>
+<text x="714.7" y="207.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+90%</text>
+<text x="466.0" y="227.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<text x="24.0" y="301.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Harder</text>
+<text x="24.0" y="318.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b3, 5 tasks</text>
+<path d="M458.0,254.0H605.9Q609.9,254.0 609.9,258.0V268.0Q609.9,272.0 605.9,272.0H458.0Z" fill="#2a78d6"/>
+<text x="615.9" y="267.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+55%</text>
+<path d="M458.0,274.0H453.8Q449.8,274.0 449.8,278.0V288.0Q449.8,292.0 453.8,292.0H458.0Z" fill="#eb6834"/>
+<text x="443.8" y="287.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−3%</text>
+<path d="M458.0,294.0H292.9Q288.9,294.0 288.9,298.0V308.0Q288.9,312.0 292.9,312.0H458.0Z" fill="#1baf7a"/>
+<text x="282.9" y="307.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−61%</text>
+<path d="M458.0,314.0H692.1Q696.1,314.0 696.1,318.0V328.0Q696.1,332.0 692.1,332.0H458.0Z" fill="#eda100"/>
+<text x="702.1" y="327.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+86%</text>
+<path d="M458.0,334.0H457.2Q453.2,334.0 453.2,338.0V348.0Q453.2,352.0 457.2,352.0H458.0Z" fill="#e87ba4"/>
+<text x="447.2" y="347.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−2%</text>
+<text x="24.0" y="421.0" fill="#0b0b0b" font-size="13" font-weight="600" text-anchor="start">Smaller</text>
+<text x="24.0" y="438.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b4, 18 tasks</text>
+<path d="M458.0,374.0H476.9Q480.9,374.0 480.9,378.0V388.0Q480.9,392.0 476.9,392.0H458.0Z" fill="#2a78d6"/>
+<text x="486.9" y="387.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+8%</text>
+<path d="M458.0,394.0H423.6Q419.6,394.0 419.6,398.0V408.0Q419.6,412.0 423.6,412.0H458.0Z" fill="#eb6834"/>
+<text x="413.6" y="407.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="end">−14%</text>
+<text x="466.0" y="427.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<path d="M458.0,434.0H707.4Q711.4,434.0 711.4,438.0V448.0Q711.4,452.0 707.4,452.0H458.0Z" fill="#eda100"/>
+<text x="717.4" y="447.5" fill="#0b0b0b" font-size="12" font-weight="400" text-anchor="start">+91%</text>
+<text x="466.0" y="467.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
 </svg>

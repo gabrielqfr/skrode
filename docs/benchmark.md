@@ -8,9 +8,15 @@ real changes from public Python repositories, 3 runs each, on 16 October 2026.
 **Result: it did not.** With Sonnet 5.5 as the orchestrator, every row passed every check, so
 the rows differ only in cost. A local or hosted worker behind skrode cost Claude slightly
 *more* than Sonnet doing the work alone. Writing the task, waiting on the job and reviewing the
-branch cost about what implementing it costs. The only row that saved anything was Claude
-Code's own subagent running Haiku 5.5. It saved 13% a run overall and 55% on the harder tasks.
+branch cost about what implementing it costs. Of those rows, the only one that saved anything
+was Claude Code's own subagent running Haiku 5.5. It saved 13% a run overall and 55% on the
+harder tasks.
 The project stopped there; this repository is the record.
+
+**A later round (21 October 2026) added two rows.** Haiku 5.5 on its own, with no orchestrator,
+passed all 84 checks at a median of $0.008 a run, 93% less than Sonnet alone. Opus 5.5
+orchestrating the same Haiku subagent, run on the 5 harder tasks only, passed all 15 and cost
+about what Sonnet alone did. The checks cannot tell these rows apart on quality (see Limits).
 
 ## Rows
 
@@ -24,6 +30,8 @@ harness in the worktree the row left behind. The row's own report is never trust
 | `claude-haiku-subagent` | Sonnet 5.5 delegates to an `implementer` subagent on Haiku 5.5, then reviews and runs the checks. |
 | `router-flash` | Sonnet 5.5 calls skrode over MCP; the worker is DeepSeek V4.1 Flash (through `bench/forwarder.py`). Sonnet reviews and merges the job's branch, or finishes the work itself if the job escalates. |
 | `router-bonsai` | The same, with the worker on a local GPU: Ternary Bonsai 2 27B (`PTQ1_0`) on llama-server, RTX 4080 16 GB. |
+| `claude-haiku` | Claude Code, Haiku 5.5, implements the spec itself, with `claude-sonnet`'s prompt. Added 21 October. |
+| `claude-opus-haiku-subagent` | Opus 5.5 delegates to the same Haiku 5.5 `implementer` subagent, with `claude-haiku-subagent`'s prompt. Added 21 October, b3 only. |
 
 The prompts and command lines for each row are in `skrode/benchrun.py`.
 
@@ -43,6 +51,10 @@ and GPU energy are totals over the row's runs.
 | claude-haiku-subagent | 84 | 84 | 1.1 | 0.0953 | **+0.0143** | 289k | - | - |
 | router-flash | 84 | 84 | 1.6 | 0.1131 | -0.0071 | 188k | 0.87 | - |
 | router-bonsai | 20 | 19 | 10.2 | 0.1555 | -0.0122 | 487k | - | 1072 (US$ 0.19) |
+| claude-haiku | 84 | 84 | 0.7 | 0.0081 | **+0.1050** | 297k | - | - |
+| claude-opus-haiku-subagent | 15 | 15 | 5.9 | 0.3026 | -0.0054 | 1213k | - | - |
+
+claude-opus-haiku-subagent ran only on b3, so its line is b3's; compare it with the b3 rows below.
 
 The Haiku row uses *more* Claude tokens than Sonnet alone and still costs less, because Haiku's
 tokens are cheaper. Token counts include cache reads, which dominate every row. Most of
@@ -56,13 +68,17 @@ router-flash's extra 36k tokens are cache reads, from the extra turns spent wait
 | | | claude-haiku-subagent | 15 | 15 | 1.3 | 0.0898 | +0.0296 |
 | | | router-flash | 15 | 15 | 1.7 | 0.1075 | +0.0184 |
 | | | router-bonsai | 15 | 15 | 7.3 | 0.1477 | -0.0016 |
+| | | claude-haiku | 15 | 15 | 0.8 | 0.0082 | +0.1111 |
 | b3 | 5 harder | claude-sonnet | 15 | 15 | 1.7 | 0.3105 | 0 |
 | | | claude-haiku-subagent | 15 | 15 | 4.7 | 0.1463 | **+0.1697** |
 | | | router-flash | 15 | 15 | 4.0 | 0.2436 | -0.0092 |
 | | | router-bonsai | 5 | 4 | 31.0 | 0.5287 | -0.1889 |
+| | | claude-haiku | 15 | 15 | 3.7 | 0.0446 | **+0.2659** |
+| | | claude-opus-haiku-subagent | 15 | 15 | 5.9 | 0.3026 | -0.0054 |
 | b4 | 18 smaller | claude-sonnet | 54 | 54 | 0.4 | 0.0971 | 0 |
 | | | claude-haiku-subagent | 54 | 54 | 0.6 | 0.0902 | +0.0080 |
 | | | router-flash | 54 | 54 | 1.0 | 0.1069 | -0.0134 |
+| | | claude-haiku | 54 | 54 | 0.5 | 0.0063 | **+0.0885** |
 
 router-bonsai ran 3 runs on b1 and 1 on b3 (a b3 run takes the GPU for 30-45 minutes), and none
 on b4. The one failed check is a b3 run that hit the 45-minute timeout.
@@ -96,17 +112,27 @@ turn cap would not change the conclusion. Both are means; the medians are lower.
 - **A subagent inside Claude Code is the cheaper handoff.** It shares the session, needs no
   spec-and-review round trip through a tool, and its tokens are billed at Haiku's rate.
   Its savings grow with the task.
+- **Haiku 5.5 alone passed every check, for a fraction of any handoff.** It cost 86-91% less
+  than Sonnet alone on every batch, and less than a third of the Sonnet + Haiku subagent row on
+  the harder tasks. On these tasks the cheapest setup is no handoff at all, on the cheap model.
+  The checks are the only quality measure here, so this says Haiku clears them, not that its
+  code is as good.
+- **An Opus orchestrator costs what Sonnet alone does.** Most of its cost is Opus's own planning
+  and review turns, not the subagent's work, so delegating from Opus saves nothing next to
+  Sonnet working alone, and costs twice what Sonnet orchestrating the same subagent costs.
 - **These results do not cover read-heavy work.** Tools that report 80-95% savings (houtini-lm,
   for one) measure tasks where a large file is read by the other model and only a short answer
   comes back to Claude. That is a different workload; this bench does not test it.
 
 ## Limits
 
-- Quality is measured only by the checks. All four rows pass nearly everything, so the bench
+- Quality is measured only by the checks. Every row passes nearly everything, so the bench
   cannot rank them on quality. We did not review the diffs (they are in `bench/results/`).
 - Three runs per task. Claude rows vary little run to run, but medians over 15 runs (one batch)
   are still small samples.
-- One orchestrator (Sonnet 5.5), one Claude Code release line (2.1.300-2.1.301), one GPU.
+- Sonnet 5.5 orchestrates every original row, on Claude Code 2.1.300-2.1.301, and one GPU. The
+  two later rows ran five days later on Claude Code 2.1.306, paid from API credit; Claude $ is
+  the same `total_cost_usd` figure. Opus 5.5 orchestrated only the 15 b3 runs.
 - Dollars stand in for quota. Anthropic does not publish how subscription quota weighs models.
 - GPU energy is marginal (above the GPU's idle draw with the model loaded), GPU only (a lower
   bound), from `nvidia-smi`, at R$ 0.89181/kWh and R$ 5.11 per US$. Hardware is not counted.
@@ -149,8 +175,8 @@ commands run sandboxed with no network.
          --out runs/mine --worktrees ~/.cache/skrode-bench/wt --runs 3 \
          datasette-write-sql-views tox-override-substitution
 
-   `--row` is one of `claude-sonnet`, `claude-haiku-subagent`, `router-flash`,
-   `router-bonsai`. Then point `benchsummary` at `runs/mine`.
+   `--row` is one of `claude-sonnet`, `claude-haiku-subagent`, `claude-haiku`,
+   `claude-opus-haiku-subagent`, `router-flash`, `router-bonsai`. Then point `benchsummary` at `runs/mine`.
 
 **router-flash** needs the forwarder on port 8091, which alone holds the DeepSeek key
 (platform.deepseek.com, prepaid) and stops at a budget:
@@ -194,3 +220,7 @@ The modules a run uses are unchanged since `93ff9ec`. The runs predate two chang
 now fetches the tests from `commit` instead of a stored copy, and `check.sh` reads them from
 `HIDDEN_DIR`. Every task's rebuilt base commit is identical, SHA for SHA, to the one its runs
 used.
+
+The two later rows (`claude-haiku`, `claude-opus-haiku-subagent`) ran on 21 October on Claude
+Code 2.1.306, on tasks freshly prepared by the current `benchprep`, with `benchrun` at
+`a1e11a8`.

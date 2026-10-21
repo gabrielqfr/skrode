@@ -1,0 +1,87 @@
+........................................................................ [ 15%]
+.......................................................................s [ 30%]
+........................................................................ [ 46%]
+........................................................................ [ 61%]
+........................................................................ [ 77%]
+........................................................................ [ 92%]
+..........................sss......                                      [100%]
+=============================== warnings summary ===============================
+tests/test_cli.py::test_create_table[args0-CREATE TABLE "t" (\n   "name" TEXT,\n   "age" INTEGER\n)]
+tests/test_cli.py::test_create_table[args1-CREATE TABLE "t" (\n   "id" INTEGER PRIMARY KEY,\n   "name" TEXT,\n   "age" INTEGER,\n   "weight" FLOAT,\n   "thumbnail" BLOB\n)]
+tests/test_cli.py::test_create_table[args2-CREATE TABLE "t" (\n   "name" TEXT NOT NULL\n)]
+tests/test_cli.py::test_create_table[args3-CREATE TABLE "t" (\n   "age" INTEGER DEFAULT '3'\n)]
+tests/test_cli.py::test_create_table[args4-CREATE TABLE "t" (\n   "category" TEXT,\n   "name" TEXT,\n   PRIMARY KEY ("category", "name")\n)]
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1261: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_table_foreign_key
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1297: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_table_error_if_table_exists
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1321: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_table_ignore
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1336: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_table_replace
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1348: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_view
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1360: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_view_error_if_view_exists
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1373: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_view_ignore
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1388: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_view_replace
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1410: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_table
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1431: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_table_error
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1449: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_table_on_view_errors
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1472: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_view
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1490: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_view_on_table_errors
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1508: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_drop_view_error
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1525: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_enable_wal
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1549: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_disable_wal
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:1564: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+tests/test_cli.py::test_create_table_strict[False]
+tests/test_cli.py::test_create_table_strict[True]
+  ~/.cache/skrode-bench/wt/claude-haiku-sqlite-utils-compound-fks-r3/tests/test_cli.py:2643: DeprecationWarning: 'isolated_filesystem' is deprecated and will be removed in Click 9.0. Use 'tempfile.TemporaryDirectory' or pytest's 'tmp_path' fixture with absolute paths instead.
+    with runner.isolated_filesystem():
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+463 passed, 4 skipped, 23 warnings in 2.76s

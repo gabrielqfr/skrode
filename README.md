@@ -7,23 +7,27 @@ local one or a hosted one, and accept the work only when the task's checks pass.
 mechanical work at the same quality. A benchmark of 28 real changes from public Python
 repositories says it does not. Claude's side of the handoff (writing the job, waiting on it,
 reviewing the branch) costs about as much as doing the work. A plain Claude Code subagent on
-Haiku 5.5 was the only setup that saved anything. This repository is published as the record:
-the code, the tasks, the raw results and the steps to rerun them.
+Haiku 5.5 was the only Sonnet-orchestrated setup that saved anything, and Haiku 5.5 working
+alone, added later, passed every check for 93% less. This repository is published as the
+record: the code, the tasks, the raw results and the steps to rerun them.
 
-| Row (Sonnet 5.5 orchestrating) | Checks passed | Median Claude $ a run | Saved vs Sonnet alone |
+| Row | Checks passed | Median Claude $ a run | Saved vs Sonnet alone |
 | --- | --- | --- | --- |
 | Sonnet alone | 84 / 84 | 0.113 | - |
 | Sonnet + Haiku 5.5 subagent | 84 / 84 | 0.095 | **+13%** (+55% on the harder tasks) |
 | Sonnet + skrode + DeepSeek V4.1 Flash | 84 / 84 | 0.113 | -6% |
 | Sonnet + skrode + Bonsai 2 27B (local GPU) | 19 / 20 | 0.156 | -11% |
+| Haiku 5.5 alone (added 21 Oct) | 84 / 84 | 0.008 | **+93%** |
+| Opus 5.5 + Haiku 5.5 subagent (added 21 Oct) | 15 / 15 | 0.303 | -2% on the harder tasks |
 
 Saved is the median per-run saving as a share of Sonnet's median cost; dollars are Claude
 Code's own cost figure, the stand-in for quota. The Bonsai row ran only the 10 connected and
-harder tasks. The full results, method, limits and rerun steps are in [`docs/benchmark.md`](docs/benchmark.md).
+harder tasks, the Opus row only the 5 harder ones. The checks are the only quality measure, and
+every row clears nearly all of them. The full results, method, limits and rerun steps are in [`docs/benchmark.md`](docs/benchmark.md).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/bench-saved-dark.svg">
-  <img alt="Claude spend saved vs Sonnet alone, by batch. Connected tasks: Haiku subagent +24%, DeepSeek Flash +15%, Bonsai -1%. Harder tasks: Haiku subagent +55%, DeepSeek Flash -3%, Bonsai -61%. Smaller tasks: Haiku subagent +8%, DeepSeek Flash -14%, Bonsai not run." src="docs/img/bench-saved-light.svg">
+  <img alt="Claude spend saved vs Sonnet alone, by batch. Connected tasks: Sonnet + Haiku subagent +24%, DeepSeek Flash +15%, Bonsai -1%, Haiku alone +90%. Harder tasks: Sonnet + Haiku subagent +55%, DeepSeek Flash -3%, Bonsai -61%, Haiku alone +86%, Opus + Haiku subagent -2%. Smaller tasks: Sonnet + Haiku subagent +8%, DeepSeek Flash -14%, Haiku alone +91%; Bonsai and Opus not run." src="docs/img/bench-saved-light.svg">
 </picture>
 
 `bench/chart.py` draws this chart from `bench/results/`.

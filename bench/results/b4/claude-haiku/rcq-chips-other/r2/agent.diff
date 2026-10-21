@@ -1,0 +1,181 @@
+diff --git a/web/src/components/rcq/InputsCard.tsx b/web/src/components/rcq/InputsCard.tsx
+index 787e65a..0dd1056 100644
+--- a/web/src/components/rcq/InputsCard.tsx
++++ b/web/src/components/rcq/InputsCard.tsx
+@@ -1,7 +1,7 @@
+ import { Check } from 'lucide-react'
+-import { useId } from 'react'
++import { useId, useState } from 'react'
+ import { archetypeName } from '../../lib/decks'
+-import type { ExpectedOption, RcqInputs } from '../../lib/rcq'
++import { splitOptions, type ExpectedOption, type RcqInputs } from '../../lib/rcq'
+ import { formatPercent } from '../../lib/time'
+ import { Card, Select } from '../ui'
+ 
+@@ -87,13 +87,18 @@ export function InputsCard({
+    *  a chip for a key the field's options no longer hold. */
+   names: Record<string, string>
+ }) {
++  const [showOther, setShowOther] = useState(false)
+   const expected = new Set(inputs.expected)
++  const { main, other } = splitOptions(options)
++  // The long tail stays under "Other" unless it is expanded or picked.
++  const unpicked = other.filter((option) => !expected.has(option.key))
++  const shownOther = other.filter((option) => showOther || expected.has(option.key))
+   // A key kept from before that the options no longer hold still gets a
+   // chip, after the field's, so it can be unpicked.
+   const offered = new Set(options.map((option) => option.key))
+   const kept = (key: string): ExpectedOption => ({ key, label: archetypeName(names[key] ?? key), share: null })
+   const missing = inputs.expected.filter((key) => !offered.has(key)).map(kept)
+-  const chips = [...options, ...missing]
++  const chips = [...main, ...shownOther, ...missing]
+   const ownOptions = [
+     ...options,
+     ...(inputs.own != null && !offered.has(inputs.own) ? [kept(inputs.own)] : []),
+@@ -129,6 +134,16 @@ export function InputsCard({
+                   onToggle={() => toggle(option.key)}
+                 />
+               ))}
++              {unpicked.length > 0 && (
++                <button
++                  type="button"
++                  aria-expanded={showOther}
++                  onClick={() => setShowOther(!showOther)}
++                  className="min-h-[44px] rounded-pill border border-edge bg-surface2 px-3 text-caption font-medium text-ink2 transition-chrome hover:text-ink"
++                >
++                  {showOther ? 'Fewer' : `Other (${unpicked.length})`}
++                </button>
++              )}
+             </div>
+           )}
+         </div>
+diff --git a/web/src/lib/rcq.ts b/web/src/lib/rcq.ts
+index 7195ebb..15e9941 100644
+--- a/web/src/lib/rcq.ts
++++ b/web/src/lib/rcq.ts
+@@ -83,12 +83,18 @@ export function freshnessSentence(entry: RcqFreshnessOut, now: number): string {
+  *  (`null` when that tier has none of it). */
+ export type ExpectedOption = { key: string; label: string; share: number | null }
+ 
++/** The share from which a chip is shown up front; the smaller ones sit
++ *  under "Other" (`splitOptions`). */
++export const MAIN_SHARE = 0.02
++
+ /** The archetypes to offer as expected, most played first. The field's
+  *  presence comes one row per archetype and tier, and tiers are never
+  *  blended (`docs/metagame.md`), so every share is read at one tier: the
+  *  one with the most decks in the window. An archetype that tier never
+- *  saw comes after, with no share, by its decks at the other tiers. Ties
+- *  go by name. */
++ *  saw comes after, with no share, by its decks at the other tiers. A key
++ *  with several labels at that tier (`Azorius Control` and `Jeskai
++ *  Control` are both `Control`) sums their shares and is named by the key;
++ *  a key with one label is named by it. Ties go by name. */
+ export function expectedOptions(presence: MetaPresence[]): {
+   tier: string | null
+   options: ExpectedOption[]
+@@ -100,19 +106,27 @@ export function expectedOptions(presence: MetaPresence[]): {
+     if (tier == null || decks > (tierDecks.get(tier) ?? 0)) tier = name
+   }
+ 
+-  const byKey = new Map<string, { label: string; share: number | null; decks: number }>()
++  const byKey = new Map<
++    string,
++    { labels: Set<string>; atTier: Set<string>; share: number | null; decks: number }
++  >()
+   for (const row of presence) {
+-    const entry = byKey.get(row.archetype_key) ?? { label: row.label, share: null, decks: 0 }
++    const entry = byKey.get(row.archetype_key) ?? { labels: new Set(), atTier: new Set(), share: null, decks: 0 }
+     entry.decks += row.decks
++    entry.labels.add(row.label)
+     if (row.tier === tier) {
+-      entry.share = row.share
+-      entry.label = row.label
++      entry.share = (entry.share ?? 0) + row.share
++      entry.atTier.add(row.label)
+     }
+     byKey.set(row.archetype_key, entry)
+   }
+ 
+-  const options = Array.from(byKey, ([key, entry]) => ({ key, ...entry }))
+-  options.sort((a, b) => {
++  const rows = Array.from(byKey, ([key, entry]) => {
++    const labels = entry.atTier.size > 0 ? entry.atTier : entry.labels
++    const label = labels.size === 1 ? [...labels][0] : key
++    return { key, label, share: entry.share, decks: entry.decks }
++  })
++  rows.sort((a, b) => {
+     if (a.share != null && b.share != null && a.share !== b.share) return b.share - a.share
+     if ((a.share == null) !== (b.share == null)) return a.share == null ? 1 : -1
+     if (a.decks !== b.decks) return b.decks - a.decks
+@@ -120,8 +134,20 @@ export function expectedOptions(presence: MetaPresence[]): {
+   })
+   return {
+     tier,
+-    options: options.map(({ key, label, share }) => ({ key, label: archetypeName(label), share })),
++    options: rows.map(({ key, label, share }) => ({ key, label: archetypeName(label), share })),
++  }
++}
++
++/** The options a chip shows up front (a share of `MAIN_SHARE` or more) and
++ *  the rest, which sit under "Other". Order is kept in both. */
++export function splitOptions(options: ExpectedOption[]): { main: ExpectedOption[]; other: ExpectedOption[] } {
++  const main: ExpectedOption[] = []
++  const other: ExpectedOption[] = []
++  for (const option of options) {
++    if (option.share != null && option.share >= MAIN_SHARE) main.push(option)
++    else other.push(option)
+   }
++  return { main, other }
+ }
+ 
+ /** The part of `Storage` the inputs need, so a test can hand in its own. */
+diff --git a/web/src/views/RcqView.tsx b/web/src/views/RcqView.tsx
+index 66c0caf..e22e2da 100644
+--- a/web/src/views/RcqView.tsx
++++ b/web/src/views/RcqView.tsx
+@@ -3,7 +3,6 @@ import {
+   useGenerateRcq,
+   useGuide,
+   useLLMStatus,
+-  useMetagameStatus,
+   useMetaPresence,
+   useRcqGuide,
+   useRcqPreview,
+@@ -28,6 +27,10 @@ import {
+ } from '../lib/rcq'
+ import { writerFrom } from '../lib/writer'
+ 
++/** The window the expected-archetype chips read the field over: the last
++ *  two weeks, as a store's players netdeck from that long ago. */
++const CHIP_WINDOW_DAYS = 14
++
+ /** A deck's RCQ prep: the 75 the player will register and the archetypes
+  *  they expect, read back by the preview, then one button that writes a
+  *  tournament-day guide from them, and the latest one written.
+@@ -46,15 +49,7 @@ export function RcqView({ deckKey }: { deckKey: string }) {
+   const llmStatus = useLLMStatus()
+   const generate = useGenerateRcq()
+ 
+-  // The field's window, as the guide's own field reads it: since the last
+-  // reset when one is detected, else a year.
+-  const status = useMetagameStatus()
+-  const resetStart = status.data?.format_reset_start
+-  const metaWindow: MetaWindow | undefined = status.data
+-    ? resetStart
+-      ? { since: resetStart }
+-      : { days: 365 }
+-    : undefined
++  const metaWindow: MetaWindow = { days: CHIP_WINDOW_DAYS }
+   const presence = useMetaPresence(metaWindow)
+   const { tier, options } = useMemo(() => expectedOptions(presence.data ?? []), [presence.data])
+ 
+@@ -88,7 +83,7 @@ export function RcqView({ deckKey }: { deckKey: string }) {
+     (preview.data?.expected ?? []).map((each) => [each.key, each.name]),
+   )
+   const shareNote = tier
+-    ? `A chip's share is of the Tier ${tier} decks ${resetStart ? 'since the last reset' : 'of the last year'}.`
++    ? `A chip's share is of the Tier ${tier} decks of the last ${CHIP_WINDOW_DAYS} days; the smaller archetypes are under "Other".`
+     : null
+ 
+   return (

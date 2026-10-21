@@ -1,0 +1,10 @@
+warning: `VIRTUAL_ENV=~/Code/skrode/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+........................................................................ [ 33%]
+........................................................................ [ 67%]
+....................................................................     [100%]
+212 passed in 26.26s
+warning: `VIRTUAL_ENV=~/Code/skrode/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+All checks passed!
+$ oxlint
+Found 0 warnings and 0 errors.
+Finished in 23ms on 218 files with 104 rules using 16 threads.

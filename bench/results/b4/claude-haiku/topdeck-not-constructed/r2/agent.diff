@@ -1,0 +1,75 @@
+diff --git a/src/sensei_top/metagame/topdeck.py b/src/sensei_top/metagame/topdeck.py
+index 13f797d..bee6d6b 100644
+--- a/src/sensei_top/metagame/topdeck.py
++++ b/src/sensei_top/metagame/topdeck.py
+@@ -66,6 +66,15 @@ FORMAT = "Standard"
+ 
+ MAX_AGE_SECONDS = 24 * 3600
+ 
++# TopDeck organisers label Commander nights, drafts, sealed and prerelease
++# events "Standard", so the format filter alone lets them in as Standard
++# constructed. Matched on the tournament name, leading boundary only, so
++# "Pre Release", "Prerelease" and misspellings like "PreRealese" all match.
++_NOT_CONSTRUCTED_RE = re.compile(
++    r"(?<![a-z])(commander|edh|draft|sealed|cube|jumpstart|pre.?r?e?a?l)",
++    re.IGNORECASE,
++)
++
+ # One request line per tournament line in a decklist export: "4 Lightning
+ # Bolt" or "4x Lightning Bolt". Fallback path only, for a standings row whose
+ # deckObj carries no recognisable Mainboard/Sideboard structure — see
+@@ -275,6 +284,34 @@ def _blob_sha(payload: dict[str, Any]) -> str:
+     return hashlib.sha256(canonical).hexdigest()
+ 
+ 
++def _purge_not_constructed(conn) -> None:
++    """Delete any already-stored TopDeck event whose name is not Standard
++    constructed, with every row that hangs off it, so a refresh cleans up
++    what an earlier refresh let in. Twins that pointed at a purged event are
++    released (``duplicate_of`` cleared) rather than left dangling."""
++    rows = conn.execute(
++        "SELECT event_id, name FROM meta_event WHERE event_id LIKE 'Tournaments/Topdeck/%'"
++    ).fetchall()
++    doomed = [r["event_id"] for r in rows if _NOT_CONSTRUCTED_RE.search(r["name"] or "")]
++    if not doomed:
++        return
++    conn.execute("BEGIN")
++    try:
++        for event_id in doomed:
++            conn.execute(
++                "UPDATE meta_event SET duplicate_of = NULL WHERE duplicate_of = ?", (event_id,)
++            )
++            conn.execute("DELETE FROM meta_deck_archetype WHERE event_id = ?", (event_id,))
++            conn.execute("DELETE FROM meta_round_match WHERE event_id = ?", (event_id,))
++            conn.execute("DELETE FROM meta_deck WHERE event_id = ?", (event_id,))
++            conn.execute("DELETE FROM meta_event WHERE event_id = ?", (event_id,))
++        conn.execute("COMMIT")
++    except Exception:
++        conn.execute("ROLLBACK")
++        raise
++    log.warning("purged %d TopDeck event(s) whose name is not Standard constructed", len(doomed))
++
++
+ def refresh_topdeck(
+     conn,
+     *,
+@@ -312,6 +349,11 @@ def refresh_topdeck(
+         if not tid:
+             skipped += 1
+             continue
++        name = str(tournament.get("tournamentName") or "")
++        if _NOT_CONSTRUCTED_RE.search(name):
++            log.warning("skipping TopDeck event %r: not Standard constructed", name)
++            skipped += 1
++            continue
+         raw = _normalize(tournament)
+         blob_sha = _blob_sha(raw)
+         # Namespaced like fbettega's own "Tournaments/<source>/..." layout —
+@@ -329,6 +371,7 @@ def refresh_topdeck(
+         events.append(parsed)
+ 
+     store_events(conn, events)
++    _purge_not_constructed(conn)
+     fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+     conn.execute("BEGIN")
+     try:
