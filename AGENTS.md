@@ -100,6 +100,7 @@ Implementers do not commit.
 No home paths, usernames, emails, transcripts or data from other repositories in tracked files.
 Logs, round records and handoffs live under `.claude/`, which is ignored.
 
-Before a commit, scan what it adds; no output means clean:
+Before a commit, scan what it adds; no output means clean (the split `/ho""me/` keeps the
+scan from matching itself):
 
-    git diff --cached -U0 | grep '^+' | grep -nE "/home/|$USER|$(git config user.email)"
+    git diff --cached -U0 | grep '^+' | grep -nE "/ho""me/|$USER|$(git config user.email)"
