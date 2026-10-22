@@ -18,7 +18,7 @@ is concluded and kept as a record that others can read and rerun.
 | `scripts/verify.sh` | The checks every change must pass, with bounded output |
 | `scripts/run-local.sh` | Runs one spec through opencode and the local model in a worktree, and logs the round. The implementer until the router can build itself |
 | `implementer/opencode/` | That implementer's opencode config and rules, loaded through `XDG_CONFIG_HOME` so no global opencode config applies |
-| `bench/` | The bench: `tasks/` (28 tasks, upstream tests fetched, never stored), `results/` (the raw files the published tables come from), `forwarder.py` (the DeepSeek row's pass-through), `gpu-batch.sh`, `sampler.py` (GPU watts), `chart.py` (the README chart, into `docs/img/`), `opencode/` (the opencode row's config and rules) |
+| `bench/` | The bench: `tasks/` (28 tasks, upstream tests fetched, never stored), `results/` (the raw files the published tables come from), `forwarder.py` (the DeepSeek row's pass-through), `gpu-batch.sh`, `sampler.py` (GPU watts), `syspower.py` (whole-machine watts: GPU and CPU measured, the rest estimated), `chart.py` (the README chart, into `docs/img/`), `opencode/` (the opencode row's config and rules) |
 | `schemas/` | JSON Schemas: `run_local_subagent` arguments, the job record, the worker's five tools and its report, model profiles. `examples/` holds records the tests validate |
 | `prompts/worker.md` | Every message sent to the local model, one `## <name>` section each. Load it as written; never reword it in code |
 | `docs/` | `benchmark.md` (results, method, rerun steps); `escalation.md` (when a job ends `passed`, `escalate` or `failed`) |

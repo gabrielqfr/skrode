@@ -47,11 +47,29 @@ An item looks like this:
 
     **Needs:** ...
 
-Next ID: BL-001
+Next ID: BL-002
 
 ## Features
 
 ## Bugs
+
+### BL-001 · Bench energy priced at the pre-tax tariff
+
+type: fix · priority: P2 · status: ready · area: bench
+
+`skrode/benchsummary.py` prices worker GPU energy at R$ 0.89181/kWh, the
+tariff before ICMS and PIS/COFINS. The bill's cost per extra kWh is
+1.146179 with taxes, plus the bandeira (0.022609 under amarela), about 31%
+more. The published power dollars in `docs/benchmark.md` and the README
+are low by that much. They are fractions of a cent per job, so no
+conclusion changes.
+
+**Why deferred:** the fix changes published numbers, so it waits for a
+session that regenerates the tables.
+
+**Needs:** a decision on which flag to price at (verde, amarela, or the one
+in force at each run), then the rate in `benchsummary.py` and the text at
+`docs/benchmark.md` line 138, and the tables regenerated.
 
 ## Performance
 
