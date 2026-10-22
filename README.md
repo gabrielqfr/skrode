@@ -22,8 +22,8 @@ record: the code, the tasks, the raw results and the steps to rerun them.
 
 Saved is the median per-run saving as a share of Sonnet's median cost; dollars are Claude
 Code's own cost figure, the stand-in for quota. The Bonsai row ran only the 10 connected and
-harder tasks, the Opus row only the 5 harder ones. The checks are the only quality measure, and
-every row clears nearly all of them. The full results, method, limits and rerun steps are in [`docs/benchmark.md`](docs/benchmark.md).
+harder tasks, the Opus row only the 5 harder ones. On these tasks the checks are the only quality
+measure, and every row clears nearly all of them. The full results, method, limits and rerun steps are in [`docs/benchmark.md`](docs/benchmark.md).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/bench-saved-dark.svg">
@@ -31,6 +31,21 @@ every row clears nearly all of them. The full results, method, limits and rerun 
 </picture>
 
 `bench/chart.py` draws this chart from `bench/results/`.
+
+The checks cannot rank rows that all pass, so a second bench graded the code itself: ten real
+backlog items from the [sensei-top](https://github.com/sensei-top/sensei-top) project, one run
+per item, blind-graded by Opus 5.5 against the commit that was actually merged. It has no skrode
+row; it shows what the cheaper Claude setups give up in quality.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/bench-graded-dark.svg">
+  <img alt="Verdicts out of 10 runs. Haiku 5.5 alone: 3 merge, 6 minor, 1 major, mean score 94, median run $0.020. Sonnet + Haiku 5.5 subagent: 4 merge, 4 minor, 1 major, 1 reject, mean 90, $0.122. Opus 5.5 alone: 8 merge, 2 minor, mean 99, $0.417. Reference (merged commit): 6 merge, 3 minor, 1 major, mean 97." src="docs/img/bench-graded-light.svg">
+</picture>
+
+Opus alone needed no major fix on any item, at about 20 times Haiku's cost. Haiku alone mostly
+needed small ones. The orchestrated row's one reject came from its implementers' Bash calls
+being refused, a setup problem as much as a model one. Method and limits are in
+[`docs/benchmark.md`](docs/benchmark.md#graded-bench-quality-on-real-backlog-items).
 
 ## How it works
 
@@ -52,8 +67,8 @@ credentials; protected tests are never edited.
 | --- | --- |
 | `skrode/` | The server, the worker and the bench harness (`benchprep`, `benchrun`, `benchsummary`) |
 | `bench/tasks/` | The 28 bench tasks: specs, checks and upstream commits ([README](bench/tasks/README.md)) |
-| `bench/results/` | The raw results the tables come from |
-| `bench/forwarder.py`, `bench/gpu-batch.sh`, `bench/sampler.py`, `bench/chart.py` | Bench tooling: the DeepSeek pass-through, the GPU batch, the power sampler, the README chart |
+| `bench/results/` | The raw results the tables come from; `sensei-top/` holds the graded bench, its harness included |
+| `bench/forwarder.py`, `bench/gpu-batch.sh`, `bench/sampler.py`, `bench/chart.py` | Bench tooling: the DeepSeek pass-through, the GPU batch, the power sampler, the README charts |
 | `profiles/` | Per-model request settings (Bonsai, DeepSeek Flash) |
 | `prompts/worker.md`, `schemas/` | Every message sent to the worker; the JSON Schemas for arguments, records and reports |
 | `tests/` | pytest; no test needs a model server or the network |
