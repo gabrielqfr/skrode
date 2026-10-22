@@ -1,0 +1,25 @@
+BL-084 is done: the four `k`-label comments, the "Defect 1" docstring, and the test for the migration CHECKs are all changed in the three files the item allows. Ruff is clean, and the three target test files pass (150 tests).
+
+**Files changed**
+- `tests/test_metagame_holds.py`: k4, k1, k3 and k6 comments rewritten to state the rule. Each is one line, as before.
+  - k4: a refusal that ends a wait begins the pause at the refusal.
+  - k1: a page read before the 503 restarts the count; the date stays.
+  - k3: while paused, a 503 keeps the pause; only its Retry-After sets a not-before.
+  - k6: a completed TopDeck run deletes any hold, a wait or a pause alike.
+- `tests/test_metagame_auto.py`: the "Defect 1" docstring now says fbettega's freshness is its own stamp, so a stale TopDeck stamp must not send it to GitHub on every tick. The rule comes from `auto.py` and `source.cache_age_seconds`.
+- `tests/test_formats.py`:
+  - New `test_the_schema_checks_list_exactly_the_formats`. It opens a fresh database with `open_database` on `tmp_path`, reads the `format IN (...)` clause from `sqlite_master` for `card_legality` and `mtgo_match_pick`, and asserts the tuple equals `FORMATS`.
+  - The docstring of `test_the_seven_formats_in_mtgos_spelling` now says the API Literals follow the tuple by construction and the schema CHECKs are pinned by the new test.
+
+**Decisions I made**
+- The new test compares tuples, so order matters. Both migrations list the formats in `FORMATS` order today. If someone reorders a CHECK harmlessly, the test will fail. I chose this for "exactly"; switch to a sorted comparison if you'd rather.
+- No later migration rebuilds either table. Migrations 050, 054 and 055 mention them but do not create, drop or alter them. So the 049 and 053 definitions are still the schema.
+- I did not touch any migration or `formats.py`.
+
+**Checks**
+- `uv run ruff check .`: all checks passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_formats.py tests/test_metagame_holds.py tests/test_metagame_auto.py`: 150 passed.
+- Removing a format from `FORMATS` would fail the new test by reasoning: the CHECK still holds seven names, so the tuples differ. I did not edit `formats.py` to confirm this.
+
+**Not verified**
+- I did not run the full suite or the web checks. The item did not ask for them and the change is test-only.

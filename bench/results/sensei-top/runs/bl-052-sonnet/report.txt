@@ -1,0 +1,27 @@
+BL-052 is implemented, but the generated types are not regenerated, so `pnpm exec tsc -b` fails. `pnpm gen:types` was denied to the implementer. When I tried it myself, the command needed an approval that nobody can give in this headless run. `web/src/types/api.ts` and `web/openapi.json` are therefore untouched. Someone needs to run `pnpm gen:types` in `web/`, then `pnpm exec tsc -b`.
+
+Correction rounds: 0. I read the diff against the brief. The implementer's report names these checks and results; I did not re-run them.
+
+**Files changed**
+- `api/models/matches.py`: `MtgoUnsurePick.format: str | None`, with a `Field` description.
+- `api/routes/mtgo_picks.py`: `unsure_out` fills `format` from `info[u.match_id]["inferred"]`. `mtgo/picks.py` is untouched.
+- `MtgoPicksView.tsx`: `reasonWords` returns `mtgo.unsure.noListIn` (via `formatName`) for a `no_list` match with a format. `low_fit` and a match with no format keep `noFit`. The comment above that branch is rewritten.
+- `locales/{en,pt-BR}/mtgo.json`: `noListIn`, with the exact strings from the brief.
+- `tests/test_api.py`: a new test seeds Modern for one match and none for the other, with no lists saved. It expects `("no_list", "Modern")` and `("no_list", None)`, taken from the seeded rows.
+
+**Checks (from the implementer's report)**
+- `ruff check .`: clean.
+- The four pytest files: 417 passed.
+- `pnpm lint`: clean.
+- `pnpm test`: 758 passed.
+- `pnpm exec tsc -b`: fails with TS2339 on `match.format` in `MtgoPicksView.tsx`, because the types are not regenerated.
+
+**Decisions made**
+- I took the format from the route's own `info` map, not from `PickMatch` or `Unsure`, so `mtgo/picks.py` stays untouched.
+- No `reasonWords` test: no test file exists for `MtgoPicksView` or its helpers, and the function isn't exported. I built no render harness.
+- No doc edits: neither doc names the unsure item's fields or the "No saved list fits." line.
+- No `tests/test_mtgo_picks.py` test; the route test in `tests/test_api.py` covers the field.
+
+**Not verified**
+- Whether the regenerated types contain `format`, and `tsc -b` passing.
+- Nothing was run against a real database or log.

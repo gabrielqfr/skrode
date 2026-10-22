@@ -1,0 +1,36 @@
+{
+ "files": [
+  [
+   "M",
+   "docs/architecture.md"
+  ],
+  [
+   "M",
+   "docs/design-system.md"
+  ],
+  [
+   "M",
+   "docs/frontend-pages.md"
+  ],
+  [
+   "M",
+   "docs/frontend.md"
+  ],
+  [
+   "M",
+   "docs/llm.md"
+  ],
+  [
+   "M",
+   "scripts/check_doc_links.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3524 passed, 2 skipped in 459.48s (0:07:39)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [],
+ "revert_py": null,
+ "revert_ts": null
+}

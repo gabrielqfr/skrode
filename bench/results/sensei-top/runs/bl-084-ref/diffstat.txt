@@ -1,0 +1,5 @@
+ BACKLOG.md                   | 13 -------------
+ tests/test_formats.py        | 31 ++++++++++++++++++++++++++++++-
+ tests/test_metagame_auto.py  |  4 ++--
+ tests/test_metagame_holds.py |  8 ++++----
+ 4 files changed, 36 insertions(+), 20 deletions(-)

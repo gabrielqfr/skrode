@@ -1,0 +1,20 @@
+The deck guide's Export card now has a "Download .md" button beside "Copy the Markdown". I did not click it in a browser, so the file save is unverified. No correction rounds were needed.
+
+I read the diff against the brief. It touches only the three allowed files, and the comments are still true.
+
+**Files changed**
+- `web/src/components/guide/WriteAndExport.tsx`: a local `download()` built like RCQ's `CarryCard` download. It saves a Blob through an anchor and revokes the URL after one second. The button is `variant="secondary"` and `disabled` while there is no text. The copy and download buttons now share a wrapper `div`, and the copy button's `mb-2` moved to it.
+- `web/src/locales/en/decks.json`: `decks.guide.export.download` is "Download .md".
+- `web/src/locales/pt-BR/decks.json`: the same key is "Baixar .md".
+
+**Checks** (the implementer ran each once; I did not re-run them)
+- `pnpm lint`: clean.
+- `pnpm test`: 758 tests passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_i18n.py tests/test_site.py`: 251 passed.
+
+**Decisions**
+- **File name:** it is plain `deck-guide.md`, not dated. The only date in scope is `response?.authored_at`, which dates the narrative card, not the Markdown export, and is null when no narrative exists. Using it would mislabel the file, and the brief barred adding a prop or fetch.
+- **Redundant guard:** the button sits inside the `markdown.data` branch, so `disabled={!markdown.data?.markdown}` can never be true there. I kept it to match "disabled while there is no text."
+
+**Not verified**
+- That the downloaded file has the right name and content.

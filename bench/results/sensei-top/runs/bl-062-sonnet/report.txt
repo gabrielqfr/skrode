@@ -1,0 +1,24 @@
+BL-062 is done except for one failing check. `tests/test_doc_refs.py::test_every_name_the_docs_give_exists` fails because `BACKLOG.md` still names the removed symbols. That file is outside the list I could touch, so I stopped there.
+
+**Checks run**
+- `uv run ruff check .` passes.
+- `tests/test_doc_refs.py` and `tests/test_site.py`: 160 passed, 1 failed. The failure is the one above. The lines are `BACKLOG.md:930` (`SharedDraft`, `DraftPayload`) and `:938` (`deleteContributions`), which are BL-062's own text. Closing the item will clear it.
+- `web/`: `pnpm lint`, `pnpm test` (758 passed) and `pnpm exec tsc -b` pass.
+- `desktop/`: `pnpm typecheck` and `pnpm test` (342 passed) pass.
+
+**What changed**
+- The four named files are deleted: `SharingSection.tsx`, `DraftReceipt.tsx`, `PayloadView.tsx` and `SharingNote.tsx`.
+- `bridge.ts`, `bridge.test.ts`, `sampleShell.ts`, `SettingsView.tsx`, `SurfacesView.tsx`, `desktop/src/preload.ts`, `desktop/src/settings.ts` and `desktop/src/settings.test.ts` no longer carry any sharing code.
+- The `prompts.sharing` block and the Draft data keys in `settings.json` are removed in both `en` and `pt-BR`. Keys were only deleted, never reworded.
+- `docs/frontend.md` lost the table row and the draft-sharing paragraphs.
+- I read the diff stat and grepped `web/src`, `desktop/src` and `docs` for leftover sharing or contribution references. Only the unrelated plain-English uses remain, such as `TurnChart.tsx` and `OpponentHandCard.tsx`. I did not read the full diff line by line.
+
+**Decisions made without asking**
+- The implementer also removed five other `Shell` sharing members (`setSharing`, `payloadOf`, `sharedState`, `unshare`, `newInstallation`), because they used the deleted types.
+- The three `sharing-*` sample IDs in `sampleShell.ts` are gone, since they only existed to show sharing.
+- `afterAWhileWith` in `sampleShell.ts` now has one caller; I left it in place.
+- Nothing from `deleteContributions` was kept: no live feature uses it.
+
+**Corrections:** no correction rounds were needed.
+
+**Not verified:** I did not run `pnpm build`. I also did not render `/design/surfaces` in a browser.

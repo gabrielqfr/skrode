@@ -1,0 +1,6 @@
+ BACKLOG.md                              | 12 -----
+ src/sensei_top/api/routes/mtgo_picks.py | 53 ++-----------------
+ src/sensei_top/archetypes/classify.py   | 90 +++++++++++++++++++++------------
+ tests/test_api.py                       | 36 ++++---------
+ tests/test_classify_seen.py             | 27 ++++++++++
+ 5 files changed, 97 insertions(+), 121 deletions(-)

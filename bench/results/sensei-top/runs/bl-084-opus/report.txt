@@ -1,0 +1,21 @@
+I removed the review labels from the four comments and the docstring, and added the CHECK test. Both done-when checks pass: `ruff check .` is clean, and `pytest -q` on the three test files gives 151 passed.
+
+**Files changed**
+- `tests/test_metagame_holds.py`: the four labels (k4, k1, k3, k6) are gone, and each comment now states its rule in about the same length:
+  - k4: a refusal during a wait pauses the source, dated from the refusal.
+  - k1: a page read before the 503 restarts the count.
+  - k3: the not-before comes from Retry-After when it carries one.
+  - k6: a run that reached its last format lifts whatever hold it began under. I took this wording from `docs/metagame.md`, because the old line ("one format answered") didn't match the doc's definition of a completed run.
+- `tests/test_metagame_auto.py`: the "Defect 1" docstring now says fbettega judges its freshness by its own stamp, not the oldest of every source's.
+- `tests/test_formats.py`: new test `test_the_schemas_format_checks_are_the_format_list`, run once for `card_legality` and once for `mtgo_match_pick`. It opens a fresh database with `open_database` on a `tmp_path` file, reads each table's SQL from `sqlite_master`, pulls out the `format IN (...)` list and checks it equals `FORMATS`, order included. The old docstring now says the API's Literals are built from the tuple and that the schema's CHECKs are pinned by the new test.
+
+**Decisions I made**
+- The test compares the lists in order, not as sets, so reordering `FORMATS` would also fail it. That is stricter than the item asked.
+- No later migration rebuilds either table: only 049 and 053 create them. The test reads the migrated schema anyway, so a future rebuild would be what it checks.
+- I left the module docstring ("The format list, …") as it was; the new test falls under "the format list".
+
+**Checked by reasoning, not by running**
+- I did not edit `formats.py` to see the test fail. Removing a format from `FORMATS` would leave the migrated CHECK listing seven names against six, so the tuple comparison fails for both tables. (`test_the_seven_formats_in_mtgos_spelling` would fail too.)
+
+**Not run**
+- The full test suite and the web checks: only the three files the item names were run.

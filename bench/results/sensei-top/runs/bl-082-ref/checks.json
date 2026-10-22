@@ -1,0 +1,53 @@
+{
+ "files": [
+  [
+   "M",
+   "BACKLOG.md"
+  ],
+  [
+   "M",
+   "docs/architecture.md"
+  ],
+  [
+   "M",
+   "docs/design-system.md"
+  ],
+  [
+   "M",
+   "docs/frontend-pages.md"
+  ],
+  [
+   "M",
+   "docs/frontend.md"
+  ],
+  [
+   "M",
+   "docs/llm.md"
+  ],
+  [
+   "M",
+   "docs/testing.md"
+  ],
+  [
+   "M",
+   "scripts/check_doc_links.py"
+  ],
+  [
+   "A",
+   "tests/test_doc_links.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3528 passed, 2 skipped in 355.27s (0:05:55)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_doc_links.py"
+ ],
+ "revert_py": {
+  "exit": 1,
+  "summary": "1 failed, 3 passed in 1.18s"
+ },
+ "revert_ts": null
+}

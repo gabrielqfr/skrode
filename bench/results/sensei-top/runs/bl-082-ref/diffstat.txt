@@ -1,0 +1,10 @@
+ BACKLOG.md                 | 12 ----------
+ docs/architecture.md       |  8 ++++---
+ docs/design-system.md      |  8 +++----
+ docs/frontend-pages.md     |  5 +++--
+ docs/frontend.md           |  5 +++--
+ docs/llm.md                |  5 +++--
+ docs/testing.md            |  7 +++---
+ scripts/check_doc_links.py | 11 ++++-----
+ tests/test_doc_links.py    | 56 ++++++++++++++++++++++++++++++++++++++++++++++
+ 9 files changed, 84 insertions(+), 33 deletions(-)

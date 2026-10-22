@@ -1,0 +1,28 @@
+{
+ "files": [
+  [
+   "M",
+   "web/src/components/guide/WriteAndExport.tsx"
+  ],
+  [
+   "M",
+   "web/src/locales/en/decks.json"
+  ],
+  [
+   "M",
+   "web/src/locales/pt-BR/decks.json"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3524 passed, 2 skipped in 614.46s (0:10:14)",
+ "web": {
+  "lint": 0,
+  "test": 0,
+  "tsc": 0
+ },
+ "desktop": null,
+ "tests_changed": [],
+ "revert_py": null,
+ "revert_ts": null
+}

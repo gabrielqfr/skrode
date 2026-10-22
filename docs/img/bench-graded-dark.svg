@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="310" viewBox="0 0 760 310" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+<title id="title">Sensei Top backlog items, blind-graded by Opus 5.5</title>
+<desc id="desc">Haiku 5.5 alone: 3 merge, 6 minor, 1 major, 0 reject, mean score 94, median run $0.020; Sonnet + Haiku 5.5 subagent: 4 merge, 4 minor, 1 major, 1 reject, mean score 90, median run $0.122; Opus 5.5 alone: 8 merge, 2 minor, 0 major, 0 reject, mean score 99, median run $0.417; Reference (merged commit): 6 merge, 3 minor, 1 major, 0 reject, mean score 97.</desc>
+<rect width="760" height="310" fill="#1a1a19"/>
+<text x="24.0" y="32.0" fill="#f0efec" font-size="16" font-weight="600" text-anchor="start">Ten real backlog items, blind-graded by Opus 5.5</text>
+<text x="24.0" y="52.0" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">The grader's verdict on each run. The reference is the change that was merged, graded the same way</text>
+<rect x="24.0" y="70" width="12" height="12" rx="2" fill="#b7d3f6"/>
+<text x="42.0" y="80.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">merge as is</text>
+<rect x="143.2" y="70" width="12" height="12" rx="2" fill="#5598e7"/>
+<text x="161.2" y="80.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">minor fixes</text>
+<rect x="262.4" y="70" width="12" height="12" rx="2" fill="#256abf"/>
+<text x="280.4" y="80.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">major fixes</text>
+<rect x="381.6" y="70" width="12" height="12" rx="2" fill="#184f95"/>
+<text x="399.6" y="80.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">reject</text>
+<text x="640.0" y="116.0" fill="#898781" font-size="12" font-weight="400" text-anchor="end">Mean score</text>
+<text x="736.0" y="116.0" fill="#898781" font-size="12" font-weight="400" text-anchor="end">Median run $</text>
+<text x="24.0" y="144.5" fill="#f0efec" font-size="13" font-weight="400" text-anchor="start">Haiku 5.5 alone</text>
+<rect x="230.0" y="128.0" width="91.0" height="24" fill="#b7d3f6"/>
+<text x="275.5" y="144.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">3</text>
+<rect x="323.0" y="128.0" width="184.0" height="24" fill="#5598e7"/>
+<text x="415.0" y="144.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">6</text>
+<path d="M509.0,128.0H536.0Q540.0,128.0 540.0,132.0V148.0Q540.0,152.0 536.0,152.0H509.0Z" fill="#256abf"/>
+<text x="524.5" y="144.5" fill="#f0efec" font-size="12" font-weight="600" text-anchor="middle">1</text>
+<text x="640.0" y="144.5" fill="#f0efec" font-size="13" font-weight="600" text-anchor="end">94</text>
+<text x="736.0" y="144.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="end">0.020</text>
+<text x="24.0" y="182.5" fill="#f0efec" font-size="13" font-weight="400" text-anchor="start">Sonnet + Haiku 5.5 subagent</text>
+<rect x="230.0" y="166.0" width="122.0" height="24" fill="#b7d3f6"/>
+<text x="291.0" y="182.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">4</text>
+<rect x="354.0" y="166.0" width="122.0" height="24" fill="#5598e7"/>
+<text x="415.0" y="182.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">4</text>
+<rect x="478.0" y="166.0" width="29.0" height="24" fill="#256abf"/>
+<text x="492.5" y="182.5" fill="#f0efec" font-size="12" font-weight="600" text-anchor="middle">1</text>
+<path d="M509.0,166.0H536.0Q540.0,166.0 540.0,170.0V186.0Q540.0,190.0 536.0,190.0H509.0Z" fill="#184f95"/>
+<text x="524.5" y="182.5" fill="#f0efec" font-size="12" font-weight="600" text-anchor="middle">1</text>
+<text x="640.0" y="182.5" fill="#f0efec" font-size="13" font-weight="600" text-anchor="end">90</text>
+<text x="736.0" y="182.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="end">0.122</text>
+<text x="24.0" y="220.5" fill="#f0efec" font-size="13" font-weight="400" text-anchor="start">Opus 5.5 alone</text>
+<rect x="230.0" y="204.0" width="246.0" height="24" fill="#b7d3f6"/>
+<text x="353.0" y="220.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">8</text>
+<path d="M478.0,204.0H536.0Q540.0,204.0 540.0,208.0V224.0Q540.0,228.0 536.0,228.0H478.0Z" fill="#5598e7"/>
+<text x="509.0" y="220.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">2</text>
+<text x="640.0" y="220.5" fill="#f0efec" font-size="13" font-weight="600" text-anchor="end">99</text>
+<text x="736.0" y="220.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="end">0.417</text>
+<text x="24.0" y="258.5" fill="#f0efec" font-size="13" font-weight="400" text-anchor="start">Reference (merged commit)</text>
+<rect x="230.0" y="242.0" width="184.0" height="24" fill="#b7d3f6"/>
+<text x="322.0" y="258.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">6</text>
+<rect x="416.0" y="242.0" width="91.0" height="24" fill="#5598e7"/>
+<text x="461.5" y="258.5" fill="#1a1a19" font-size="12" font-weight="600" text-anchor="middle">3</text>
+<path d="M509.0,242.0H536.0Q540.0,242.0 540.0,246.0V262.0Q540.0,266.0 536.0,266.0H509.0Z" fill="#256abf"/>
+<text x="524.5" y="258.5" fill="#f0efec" font-size="12" font-weight="600" text-anchor="middle">1</text>
+<text x="640.0" y="258.5" fill="#f0efec" font-size="13" font-weight="600" text-anchor="end">97</text>
+<text x="736.0" y="258.5" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="end">–</text>
+<text x="230.0" y="292.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">Runs out of 10, one per item. Score: a weighted 0-4 rubric, out of 100</text>
+</svg>

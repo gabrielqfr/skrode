@@ -1,0 +1,133 @@
+{
+ "files": [
+  [
+   "M",
+   "docs/architecture.md"
+  ],
+  [
+   "M",
+   "docs/coach.md"
+  ],
+  [
+   "M",
+   "docs/guide.md"
+  ],
+  [
+   "M",
+   "docs/opponent-deck.md"
+  ],
+  [
+   "M",
+   "docs/review.md"
+  ],
+  [
+   "M",
+   "scripts/verify_archetypes.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/api/routes/mtgo_picks.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/archetypes/classify.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/archetypes/corpus.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/coach/evidence.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/field.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/list_diff.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/rcq.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/metagame/classify_meta.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/review/leaks.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/review/narrative.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/review/snapshot.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/table/intermission.py"
+  ],
+  [
+   "M",
+   "tests/test_classify.py"
+  ],
+  [
+   "M",
+   "tests/test_classify_seen.py"
+  ],
+  [
+   "M",
+   "tests/test_coach_evidence.py"
+  ],
+  [
+   "M",
+   "tests/test_coach_narrative.py"
+  ],
+  [
+   "M",
+   "tests/test_corpus_naming.py"
+  ],
+  [
+   "M",
+   "tests/test_guide_list_diff.py"
+  ],
+  [
+   "M",
+   "tests/test_leaks.py"
+  ],
+  [
+   "M",
+   "tests/test_review.py"
+  ],
+  [
+   "M",
+   "tests/test_review_mtgo.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3528 passed, 2 skipped in 349.95s (0:05:49)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_classify.py",
+  "tests/test_classify_seen.py",
+  "tests/test_coach_evidence.py",
+  "tests/test_coach_narrative.py",
+  "tests/test_corpus_naming.py",
+  "tests/test_guide_list_diff.py",
+  "tests/test_leaks.py",
+  "tests/test_review.py",
+  "tests/test_review_mtgo.py"
+ ],
+ "revert_py": {
+  "exit": 2,
+  "summary": "4 errors in 0.40s"
+ },
+ "revert_ts": null
+}

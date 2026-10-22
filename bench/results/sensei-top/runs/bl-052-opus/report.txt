@@ -1,0 +1,20 @@
+On `/mtgo/picks`, an unsure match with no saved list in its inferred format now reads "No saved list in Modern." (or whatever its format is) instead of "No saved list fits." All the required checks pass. There is no test for the wording itself (see below).
+
+**Files changed**
+- `api/models/matches.py`: `MtgoUnsurePick` has a new `format: str | None` field, described as the format inferred for the match, null when none was.
+- `api/routes/mtgo_picks.py`: `unsure_out` fills `format` from the route's own match row (`info[u.match_id]["inferred"]`). `PickMatch.format` is built from that same column, so I left `mtgo/picks.py` alone.
+- `web/src/types/api.ts`: regenerated with `pnpm gen:types`. `web/openapi.json` was rewritten too but git lists no change for it, which I expected.
+- `MtgoPicksView.tsx::reasonWords`: a `no_list` match with a format uses the new `mtgo.unsure.noListIn` key, with the format named by `formatName`. A `low_fit` match with no best list, and a match with no format, still read `noFit`. I rewrote the comment to say so.
+- `locales/{en,pt-BR}/mtgo.json`: `noListIn` added with your exact strings.
+- `tests/test_api.py`: a new test inserts a Modern inference for match A only and removes every list. It asserts A is `no_list` with `"Modern"` and B is `no_list` with `null`. It fails if the route change is reverted.
+
+**Checks**
+- `ruff check .`: clean.
+- The four pytest files: 417 passed.
+- `pnpm lint`, `pnpm test` (758 passed) and `pnpm exec tsc -b`: all clean.
+
+**Decisions I made**
+- **No `reasonWords` test.** The only nearby helper test is `lib/mtgoPicks.test.ts`, and `reasonWords` isn't in `lib/mtgoPicks.ts`. I tried exporting it from the view with a test beside it, but oxlint then warns `react(only-export-components)`. Moving it into `lib/mtgoPicks.ts` would touch a file outside the allowed list, so I removed the export and the test. A follow-up could move it there and add the three cases to that test file.
+- **No doc edits.** No sentence in `docs/frontend-pages.md` or `docs/architecture.md` names the unsure item's fields or the "No saved list fits." line.
+
+**Not verified:** I didn't look at the page in a running app, and nothing tests the Portuguese string.

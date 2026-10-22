@@ -1,0 +1,52 @@
+{
+ "files": [
+  [
+   "M",
+   "BACKLOG.md"
+  ],
+  [
+   "M",
+   "CHANGELOG.md"
+  ],
+  [
+   "M",
+   "docs/frontend-pages.md"
+  ],
+  [
+   "M",
+   "web/src/api.ts"
+  ],
+  [
+   "M",
+   "web/src/components/guide/WriteAndExport.tsx"
+  ],
+  [
+   "M",
+   "web/src/components/rcq/RcqResult.tsx"
+  ],
+  [
+   "A",
+   "web/src/lib/download.ts"
+  ],
+  [
+   "M",
+   "web/src/locales/en/decks.json"
+  ],
+  [
+   "M",
+   "web/src/locales/pt-BR/decks.json"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3524 passed, 2 skipped in 399.20s (0:06:39)",
+ "web": {
+  "lint": 0,
+  "test": 0,
+  "tsc": 0
+ },
+ "desktop": null,
+ "tests_changed": [],
+ "revert_py": null,
+ "revert_ts": null
+}

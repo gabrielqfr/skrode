@@ -1,0 +1,28 @@
+{
+ "files": [
+  [
+   "M",
+   "tests/test_formats.py"
+  ],
+  [
+   "M",
+   "tests/test_metagame_auto.py"
+  ],
+  [
+   "M",
+   "tests/test_metagame_holds.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3529 passed, 2 skipped in 403.25s (0:06:43)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_formats.py",
+  "tests/test_metagame_auto.py",
+  "tests/test_metagame_holds.py"
+ ],
+ "revert_py": null,
+ "revert_ts": null
+}

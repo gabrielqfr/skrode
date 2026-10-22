@@ -1,0 +1,22 @@
+BL-008 is implemented: the deck guide's Export card now has a "Download .md" button beside the copy button. Lint, the dashboard tests and the Python checks all pass. I did not click the button in a browser.
+
+**Files changed**
+- `web/src/components/guide/WriteAndExport.tsx`: the copy and download buttons now sit in a `flex-wrap` row. Download uses the RCQ pattern (Blob, anchor, revoke after a second) and is `Button variant="secondary" size="sm"`, matching the copy button. The copy button's `mb-2` moved to the row.
+- `web/src/locales/en/decks.json`: `decks.guide.export.download` = `"Download .md"`.
+- `web/src/locales/pt-BR/decks.json`: same key = `"Baixar .md"`.
+
+**Checks**
+- `pnpm lint`: ran clean, oxlint printed no diagnostics. I did not capture its exit code.
+- `pnpm test`: 41 files, 758 tests, all passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_i18n.py tests/test_site.py`: 251 passed.
+
+**Decisions I made**
+- **File name is `deck-guide.md`, with no date.** The Markdown comes from `useGuideMarkdown`, which fetches fresh on each panel open. Its response carries no generation date in the component's scope. The only date in scope is `response?.authored_at`, which dates the narrative, not the evidence document. I did not add a prop or fetch to get one. I did not read `web/src/types/api.ts` to confirm whether `GuideMarkdownOut` has a date field.
+- The disabled state follows the brief's "disabled while there is no text". In this panel the button only renders once `markdown.data` exists, so it is never disabled there. I did not add a separate `disabled` prop.
+- I added a short comment above the download helper explaining why there is no date in the file name.
+
+**Not verified**
+- I did not click the button in a browser, so I have not confirmed that the browser saves the file as `deck-guide.md`.
+- I did not check the button's layout at 1008 px.
+
+No commits, no branch changes, no network use, and I did not touch `api.ts`, `openapi.json`, or any fixture.

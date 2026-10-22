@@ -1,0 +1,10 @@
+ BACKLOG.md                                  | 14 --------------
+ CHANGELOG.md                                |  5 +++++
+ docs/frontend-pages.md                      |  2 +-
+ web/src/api.ts                              |  3 ++-
+ web/src/components/guide/WriteAndExport.tsx | 25 +++++++++++++++++--------
+ web/src/components/rcq/RcqResult.tsx        | 10 ++--------
+ web/src/lib/download.ts                     | 11 +++++++++++
+ web/src/locales/en/decks.json               |  3 ++-
+ web/src/locales/pt-BR/decks.json            |  3 ++-
+ 9 files changed, 42 insertions(+), 34 deletions(-)

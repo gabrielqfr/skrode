@@ -1,0 +1,24 @@
+BL-082 is fixed: `title_ok` now needs the cited title to match a whole heading (after `norm()`), and both checks pass. `uv run ruff check .` reports "All checks passed!" and `uv run python scripts/check_doc_links.py` reports "0 miss(es)"; both exit 0.
+
+**How I found the cut-short citations:** I wrapped `title_ok` in a throwaway script outside the repo (`/tmp/bl082_cmp.py`). It listed every citation that passed the old rule without being a whole heading of its target doc. There were five.
+
+**Citations changed** (only the quoted title; no heading renamed, no line reflowed):
+
+| file:line | old title | new title |
+|---|---|---|
+| `docs/architecture.md:158` | "The live replay" | "The live replay (\`table/live.py\`, \`projector/live_state.py\`)" |
+| `docs/design-system.md:366` | "Shared primitives" | "Shared primitives (\`components/ui/\`)" |
+| `docs/frontend-pages.md:474` | "The event rule" | "The event rule (\`table/queues.py\`)" |
+| `docs/frontend.md:317` | "The event rule" | "The event rule (\`table/queues.py\`)" |
+| `docs/llm.md:403` | "Writing prose" | "Writing prose: \`GenerateCard\` and \`CopyPromptCard\`" |
+
+For `llm.md` the reference sits on line 402 and the title on 403; the table gives the title's line.
+
+**Script change** (`scripts/check_doc_links.py`):
+- A title that equals a heading in any doc must equal a heading of the doc it names.
+- **Decision: I narrowed the `t in text` fallback.** Under the whole-heading rule alone, all five titles above still passed through the fallback, because a cut-short heading always appears in the doc's text. So a title that starts some heading without being one is now a miss. Titles that start no heading still fall back to the text search as before.
+- I updated the module docstring to say the same thing.
+
+**Verified:** a scratch file outside the repo citing `docs/current-match.md`, "The event rule" now fails with "not found" (exit 1).
+
+**Not verified:** a plain phrase that happens to begin some heading now fails too. No current citation does this, but a future one would need rewording. I didn't run pytest because only the docs and this script changed. Nothing is committed.

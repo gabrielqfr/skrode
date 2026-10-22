@@ -1,0 +1,18 @@
+ desktop/src/preload.ts                         |  14 +-
+ desktop/src/settings.test.ts                   |   1 -
+ desktop/src/settings.ts                        |   4 -
+ docs/frontend.md                               |  59 ++----
+ web/src/bridge.test.ts                         |   7 -
+ web/src/bridge.ts                              |  45 -----
+ web/src/components/settings/SharingSection.tsx | 256 -------------------------
+ web/src/components/sharing/DraftReceipt.tsx    |  60 ------
+ web/src/components/sharing/PayloadView.tsx     | 187 ------------------
+ web/src/components/sharing/SharingNote.tsx     |  18 --
+ web/src/lib/sampleShell.ts                     | 173 +----------------
+ web/src/locales/en/prompts.json                |  48 -----
+ web/src/locales/en/settings.json               |  42 ----
+ web/src/locales/pt-BR/prompts.json             |  48 -----
+ web/src/locales/pt-BR/settings.json            |  42 ----
+ web/src/views/SettingsView.tsx                 |  32 +---
+ web/src/views/SurfacesView.tsx                 |  80 +-------
+ 17 files changed, 38 insertions(+), 1078 deletions(-)

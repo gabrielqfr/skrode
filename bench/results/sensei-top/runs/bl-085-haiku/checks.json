@@ -1,0 +1,16 @@
+{
+ "files": [
+  [
+   "M",
+   "src/sensei_top/guide/field.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3524 passed, 2 skipped in 356.67s (0:05:56)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [],
+ "revert_py": null,
+ "revert_ts": null
+}

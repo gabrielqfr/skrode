@@ -1,0 +1,28 @@
+BL-062 is removed, but one check still fails, and it's in a file I was not allowed to touch.
+
+**Failing check:** `TMPDIR=/var/tmp uv run pytest -q tests/test_doc_refs.py tests/test_site.py` gives 160 passed, 1 failed. The failure is `test_every_name_the_docs_give_exists`, reporting `BACKLOG.md:930` (`SharedDraft`, `DraftPayload`) and `BACKLOG.md:938` (`deleteContributions`) as missing. Those names are in the BL-062 entry itself. Clearing it means editing or closing that entry in `BACKLOG.md`, which is outside the file list. I left it alone; that edit is yours to make or to approve.
+
+**Files changed (17):**
+- Deleted: `components/settings/SharingSection.tsx`, `components/sharing/{DraftReceipt,PayloadView,SharingNote}.tsx`.
+- `web/src/bridge.ts`, `bridge.test.ts`, `lib/sampleShell.ts`, `views/SettingsView.tsx`, `views/SurfacesView.tsx`.
+- Locales: `prompts.json` (the `sharing` block) and `settings.json` (`sections.draftData` and the `sharing` block), in `en` and `pt-BR`.
+- `desktop/src/preload.ts`, `desktop/src/settings.ts`, `desktop/src/settings.test.ts`.
+- `docs/frontend.md`: the table row, the `Sharing` field sentence, the Draft data bullet, the `components/sharing/` paragraph, and the sample description.
+
+**Checks:**
+- `uv run ruff check .`: passed.
+- `pnpm lint`, `pnpm test`, `pnpm exec tsc -b` in `web/`: passed (758 tests); tsc printed nothing.
+- `pnpm typecheck`, `pnpm test` in `desktop/`: passed (342 tests).
+- `tests/test_site.py` and the other 26 doc-ref checks passed; only the BACKLOG check above failed.
+
+**Decisions I made:**
+- Removed `setSharing`, `payloadOf`, `sharedState`, `unshare` and `newInstallation` along with `deleteContributions`. They are all draft sharing, and nothing live uses them.
+- Removed `payloadHref` from `SettingsView`; its only caller was the Draft data section.
+- Removed the `afterAWhileWith` helper, which was only used by the sharing functions, and folded it into `afterAWhile`.
+- Dropped the three sharing sample entries from `SAMPLE_OPTIONS`.
+- Removed the `Deleted` type from `desktop/src/settings.ts`, since it was only used by sharing.
+- Deleted locale keys, never reworded any. Confirmed by grep that no other `web/src` code uses them.
+- Nothing live depended on `deleteContributions`, so no part was kept.
+- No CHANGELOG line, per the item.
+
+**Not verified:** I did not run the dashboard or `/design/surfaces` in a browser.

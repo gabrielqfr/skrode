@@ -1,0 +1,13 @@
+`pre_total_scoped` in `build_field` now calls `_classified_deck_total`, so the pre-reset denominator is no longer written out inline. Both done-when checks pass, run by me after the implementer couldn't: `uv run ruff check .` was clean, and the pytest run on `tests/test_guide_field.py`, `tests/test_guide_bundle.py` and `tests/test_coach_evidence.py` gave 71 passed.
+
+**Files changed:** `src/sensei_top/guide/field.py` only. No test file was touched.
+
+**What I checked:** I read `git diff` against the brief. The helper builds the same query as the inline one: the same join, the same `archetype_name IS NOT NULL` filter, and the same bound parameters (`fmt`, `reset.date`). The updated docstring is accurate. It now lists `build_field` as a fourth caller and says the pre-reset rows still group by name for `share_before_reset`.
+
+**Decisions:**
+- I did not widen `_classified_deck_total`'s signature. It already takes a `where` string and a `params` list, so the date bound goes in as `"e.format = ? AND e.event_date <= ?"`.
+- I left the pre-reset `pre_rows` query inline, because it groups by name and the helper doesn't cover it.
+
+**Not verified:** I did not run `uv run pytest -q` over the whole suite or the frontend checks. The brief didn't ask for them, and no value changes.
+
+**Correction rounds:** 0. The implementer's Bash access was denied, so it edited without running the checks. Its edit passed review unchanged.

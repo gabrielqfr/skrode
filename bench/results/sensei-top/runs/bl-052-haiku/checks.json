@@ -1,0 +1,49 @@
+{
+ "files": [
+  [
+   "M",
+   "src/sensei_top/api/models/matches.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/api/routes/mtgo_picks.py"
+  ],
+  [
+   "M",
+   "tests/test_api.py"
+  ],
+  [
+   "M",
+   "web/src/locales/en/mtgo.json"
+  ],
+  [
+   "M",
+   "web/src/locales/pt-BR/mtgo.json"
+  ],
+  [
+   "M",
+   "web/src/types/api.ts"
+  ],
+  [
+   "M",
+   "web/src/views/MtgoPicksView.tsx"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3532 passed, 2 skipped in 356.02s (0:05:56)",
+ "web": {
+  "lint": 0,
+  "test": 0,
+  "tsc": 0
+ },
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_api.py"
+ ],
+ "revert_py": {
+  "exit": 1,
+  "summary": "1 failed, 241 passed in 53.93s"
+ },
+ "revert_ts": null
+}

@@ -1,0 +1,12 @@
+{"type":"object","additionalProperties":false,
+ "required":["scores","defects","fix_lines","verdict","summary"],
+ "properties":{
+  "scores":{"type":"object","additionalProperties":false,
+   "required":["correctness","completeness","tests","scope","prose","style","report"],
+   "properties":{"correctness":{"type":"integer","minimum":0,"maximum":4},"completeness":{"type":"integer","minimum":0,"maximum":4},"tests":{"type":"integer","minimum":0,"maximum":4},"scope":{"type":"integer","minimum":0,"maximum":4},"prose":{"type":"integer","minimum":0,"maximum":4},"style":{"type":"integer","minimum":0,"maximum":4},"report":{"type":"integer","minimum":0,"maximum":4}}},
+  "defects":{"type":"array","items":{"type":"object","additionalProperties":false,
+   "required":["where","severity","what"],
+   "properties":{"where":{"type":"string"},"severity":{"enum":["high","medium","low"]},"what":{"type":"string"}}}},
+  "fix_lines":{"type":"integer","minimum":0},
+  "verdict":{"enum":["merge","minor","major","reject"]},
+  "summary":{"type":"string"}}}

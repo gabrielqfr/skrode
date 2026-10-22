@@ -1,0 +1,10 @@
+ BACKLOG.md                              | 12 ------------
+ CHANGELOG.md                            |  6 ++++++
+ src/sensei_top/api/models/matches.py    |  3 +++
+ src/sensei_top/api/routes/mtgo_picks.py |  1 +
+ tests/test_api.py                       | 22 ++++++++++++++++++++++
+ web/src/locales/en/mtgo.json            |  3 ++-
+ web/src/locales/pt-BR/mtgo.json         |  3 ++-
+ web/src/types/api.ts                    |  5 +++++
+ web/src/views/MtgoPicksView.tsx         | 10 ++++++----
+ 9 files changed, 47 insertions(+), 18 deletions(-)
