@@ -196,6 +196,9 @@ The account balance fell about $13.40 for the whole bench, against about $20 sum
 - Dollars stand in for quota. Anthropic does not publish how subscription quota weighs models.
 - GPU energy is marginal (above the GPU's idle draw with the model loaded), GPU only (a lower
   bound), from `nvidia-smi`, at R$ 0.89181/kWh and R$ 5.11 per US$. Hardware is not counted.
+  That tariff is before ICMS and PIS/COFINS; one more kWh on the bill costs about 31% more
+  (R$ 1.146179, plus the monthly bandeira), so the power dollars are low by that much. They
+  are fractions of a cent per job, so no conclusion changes.
 
 ## Reproduce
 
