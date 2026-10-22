@@ -18,6 +18,11 @@ passed all 84 checks at a median of $0.008 a run, 93% less than Sonnet alone. Op
 orchestrating the same Haiku subagent, run on the 5 harder tasks only, passed all 15 and cost
 about what Sonnet alone did. The checks cannot tell these rows apart on quality (see Limits).
 
+**A graded bench (22 October 2026) looked at quality.** Ten real backlog items from the
+sensei-top project, blind-graded by Opus 5.5: Opus alone scored 99 of 100 with 8 of 10 runs
+ready to merge as they were, Haiku alone 94 with 3 of 10, and Sonnet orchestrating a Haiku
+subagent 90 (see "Graded bench" below).
+
 ## Rows
 
 Each row gets the same input: the spec as `SPEC.md` in a fresh worktree at the task's base
@@ -102,6 +107,55 @@ decoding. On b3, router-flash runs whose job passed saved about as much Claude s
 whose job escalated (a mean net of +$0.065 over 3 runs, against +$0.060 over 12), so a higher
 turn cap would not change the conclusion. Both are means; the medians are lower.
 
+## Graded bench: quality on real backlog items
+
+The checks above pass nearly everything, so they cannot rank rows on quality. A second bench,
+run on 22 October 2026 for the [sensei-top](https://github.com/sensei-top/sensei-top) project's
+own backlog routing, grades the code instead. It has no skrode row; it is here because it
+answers the question the checks leave open, for the Claude-only setups.
+
+- **Items:** ten finished sensei-top backlog items, each replayed from its original base commit
+  with the same brief text on every row. The briefs, written by an Opus session, name the item,
+  the files and the done-when check.
+- **Rows:** Haiku 5.5 alone, Sonnet 5.5 orchestrating a Haiku 5.5 implementer subagent, and
+  Opus 5.5 alone, one run per item each, on Claude Code 2.1.307. The commit that was actually
+  merged for each item (after its session's review fixes) is graded too, as the **reference**,
+  with no reference diff and no report to score.
+- **Checks:** ruff, the full pytest suite (about 3,500 tests), the web and desktop checks where
+  the item touches them, and a revert check: the run's non-test changes are reverted and its
+  own tests must then fail.
+- **Grade:** Opus 5.5 through `claude -p --json-schema`, blind to the row except as noted
+  below. It gets the brief, the checks, the run's report, its diff and the reference's diff.
+  Seven dimensions score 0-4 (correctness weighs 3, completeness and tests 2, scope, prose,
+  style and report 1), giving a score out of 100, plus a list of defects and a verdict: merge as
+  is, minor fixes, major fixes or reject.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="img/bench-graded-dark.svg">
+  <img alt="Verdicts out of 10 runs. Haiku 5.5 alone: 3 merge, 6 minor, 1 major, mean score 94, median run $0.020. Sonnet + Haiku 5.5 subagent: 4 merge, 4 minor, 1 major, 1 reject, mean 90, $0.122. Opus 5.5 alone: 8 merge, 2 minor, mean 99, $0.417. Reference (merged commit): 6 merge, 3 minor, 1 major, mean 97." src="img/bench-graded-light.svg">
+</picture>
+
+| Row | Runs | Score mean (min-max) | Merge / minor / major / reject | High-severity defects | Checks green | Median run $ |
+| --- | --- | --- | --- | --- | --- | --- |
+| Haiku 5.5 alone | 10 | 94 (68-100) | 3 / 6 / 1 / 0 | 2 | 9 / 10 | 0.020 |
+| Sonnet + Haiku 5.5 subagent | 10 | 90 (41-100) | 4 / 4 / 1 / 1 | 4 | 8 / 10 | 0.122 |
+| Opus 5.5 alone | 10 | **99** (98-100) | **8** / 2 / 0 / 0 | 0 | 9 / 10 | 0.417 |
+| Reference (merged commit) | 10 | 97 (90-100) | 6 / 3 / 1 / 0 | 1 | 8 / 10 | - |
+
+Run $ is Claude Code's `total_cost_usd`, as above. Each grade cost about $0.28 more. On 8
+regraded runs the grader gave the same verdict 8 times, with a mean score difference of 1.1.
+The account balance fell about $13.40 for the whole bench, against about $20 summed from
+`total_cost_usd`, so that figure overstates what was billed.
+
+- **Opus alone was the only row with no major fixes or rejects,** and it scored above the
+  reference. It cost about 20 times what Haiku alone did.
+- **Haiku alone mostly needed small fixes.** Its one major verdict (069, a rename)
+  left four names unrenamed and mangled six test names with a blanket substitution.
+- **The orchestrated row lost to a setup problem as much as to the models.** In 7 of its 10
+  runs, Claude Code's permission check refused a Bash call from the implementer. On 082 both
+  implementers had their first call refused and stopped and the orchestrator, told not to implement, stopped too:
+  the reject. On 052, `pnpm gen:types` was refused, so the types were never regenerated.
+
 ## What it means
 
 - **On small, verified coding tasks, the cost of delegating is fixed and large.** Sonnet
@@ -115,8 +169,8 @@ turn cap would not change the conclusion. Both are means; the medians are lower.
 - **Haiku 5.5 alone passed every check, for a fraction of any handoff.** It cost 86-91% less
   than Sonnet alone on every batch, and less than a third of the Sonnet + Haiku subagent row on
   the harder tasks. On these tasks the cheapest setup is no handoff at all, on the cheap model.
-  The checks are the only quality measure here, so this says Haiku clears them, not that its
-  code is as good.
+  The checks alone say only that Haiku clears them. The graded bench says its code mostly
+  needs small fixes: 94 of 100, against Opus alone's 99, with 7 of 10 runs needing some fix.
 - **An Opus orchestrator costs what Sonnet alone does.** Most of its cost is Opus's own planning
   and review turns, not the subagent's work, so delegating from Opus saves nothing next to
   Sonnet working alone, and costs twice what Sonnet orchestrating the same subagent costs.
@@ -126,8 +180,14 @@ turn cap would not change the conclusion. Both are means; the medians are lower.
 
 ## Limits
 
-- Quality is measured only by the checks. Every row passes nearly everything, so the bench
-  cannot rank them on quality. We did not review the diffs (they are in `bench/results/`).
+- On the 28 tasks, quality is measured only by the checks. Every row passes nearly
+  everything, so they cannot rank the rows on quality; the diffs are in `bench/results/`.
+- The graded bench has one run per item and row, and one grader, Opus 5.5, which may favour
+  Opus's own code. The orchestrated row's reports mention its implementer, so the grader is
+  not blind to that row. The reference is one accepted answer; the rubric counts a different
+  correct approach as no defect. The briefs were written by an Opus session, so their quality
+  is held constant, not measured. Its permission setup refused the orchestrated row's
+  implementers some Bash calls, which the other rows did not hit.
 - Three runs per task. Claude rows vary little run to run, but medians over 15 runs (one batch)
   are still small samples.
 - Sonnet 5.5 orchestrates every original row, on Claude Code 2.1.300-2.1.301, and one GPU. The
@@ -152,6 +212,19 @@ published), `agent.diff` (what the row changed), `check.log`, and for router row
 
 One batch at a time gives the per-batch tables. The token medians are the `claude_tokens` column
 of `runs.tsv`.
+
+### The graded bench
+
+`bench/results/sensei-top/` holds the harness as it ran (`bench.py`, `run_one.sh`,
+`checks.sh`, `grade.sh`, `grader.md`, `schema.json`, `variants.py`), `items.tsv` (each item's
+base and reference commits), the 30 briefs and, per run, `checks.json`, `diffstat.txt`, the
+grades, the run's report and its `run.jsonl` (the init and result lines only; the transcripts
+and diffs are not published). The tables come from:
+
+    python3 -I bench/results/sensei-top/summarize.py -v
+
+The harness expects a sensei-top checkout and its handoff folder, so a rerun means adapting the
+paths in `run_one.sh`, `checks.sh` and `grade.sh`. `bench/chart.py` draws the graded chart too.
 
 ### Rerun a row
 

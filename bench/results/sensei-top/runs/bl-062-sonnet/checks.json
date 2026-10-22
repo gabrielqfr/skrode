@@ -1,0 +1,92 @@
+{
+ "files": [
+  [
+   "M",
+   "desktop/src/preload.ts"
+  ],
+  [
+   "M",
+   "desktop/src/settings.test.ts"
+  ],
+  [
+   "M",
+   "desktop/src/settings.ts"
+  ],
+  [
+   "M",
+   "docs/frontend.md"
+  ],
+  [
+   "M",
+   "web/src/bridge.test.ts"
+  ],
+  [
+   "M",
+   "web/src/bridge.ts"
+  ],
+  [
+   "D",
+   "web/src/components/settings/SharingSection.tsx"
+  ],
+  [
+   "D",
+   "web/src/components/sharing/DraftReceipt.tsx"
+  ],
+  [
+   "D",
+   "web/src/components/sharing/PayloadView.tsx"
+  ],
+  [
+   "D",
+   "web/src/components/sharing/SharingNote.tsx"
+  ],
+  [
+   "M",
+   "web/src/lib/sampleShell.ts"
+  ],
+  [
+   "M",
+   "web/src/locales/en/prompts.json"
+  ],
+  [
+   "M",
+   "web/src/locales/en/settings.json"
+  ],
+  [
+   "M",
+   "web/src/locales/pt-BR/prompts.json"
+  ],
+  [
+   "M",
+   "web/src/locales/pt-BR/settings.json"
+  ],
+  [
+   "M",
+   "web/src/views/SettingsView.tsx"
+  ],
+  [
+   "M",
+   "web/src/views/SurfacesView.tsx"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 1,
+ "pytest_summary": "1 failed, 3530 passed, 2 skipped in 441.98s (0:07:21)",
+ "web": {
+  "lint": 0,
+  "test": 0,
+  "tsc": 0
+ },
+ "desktop": {
+  "test": 0,
+  "typecheck": 0
+ },
+ "tests_changed": [
+  "desktop/src/settings.test.ts",
+  "web/src/bridge.test.ts"
+ ],
+ "revert_py": null,
+ "revert_ts": {
+  "exit": 0
+ }
+}

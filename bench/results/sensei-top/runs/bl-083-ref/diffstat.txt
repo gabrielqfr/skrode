@@ -1,0 +1,10 @@
+ BACKLOG.md                        | 13 -------------
+ docs/architecture.md              | 16 +++++++++++-----
+ src/sensei_top/coach/evidence.py  | 11 +++++------
+ src/sensei_top/guide/bundle.py    |  5 ++---
+ src/sensei_top/guide/deck.py      | 19 +++++++++++++++++--
+ src/sensei_top/guide/field.py     | 10 ++++------
+ src/sensei_top/guide/list_diff.py |  4 ++--
+ src/sensei_top/guide/play.py      | 29 +++++++----------------------
+ tests/test_guide_play.py          | 20 ++++++++++++++++++++
+ 9 files changed, 68 insertions(+), 59 deletions(-)

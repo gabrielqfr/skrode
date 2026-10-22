@@ -1,0 +1,19 @@
+BL-082 is done: `title_ok` now requires a whole heading match, and all five citations that only passed by prefix are fixed. `uv run ruff check .` is clean and `uv run python scripts/check_doc_links.py` exits 0 with 0 misses.
+
+**Rule change** (`scripts/check_doc_links.py`, `title_ok`): when a title is a prefix of any heading, it is a section reference and must equal a heading of the named doc (`t in heads`, was `startswith`). I also updated the module docstring, which said "equals or prefixes". The `t in text` fallback is unchanged. It was not the reason a cut-short title passed: a cut-short title is by definition a prefix of some heading, so it always takes the section branch and never reaches the fallback.
+
+**Citations changed** (quoted title only; no headings renamed):
+
+1. `docs/architecture.md:158` — "The live replay" → "The live replay (`table/live.py`, `projector/live_state.py`)"
+2. `docs/design-system.md:366` — "Shared primitives" → "Shared primitives (`components/ui/`)"
+3. `docs/frontend-pages.md:474` — "The event rule" → "The event rule (`table/queues.py`)"
+4. `docs/frontend.md:317` — "The event rule" → "The event rule (`table/queues.py`)"
+5. `docs/llm.md:403` — "Writing prose" → "Writing prose: `GenerateCard` and `CopyPromptCard`"
+
+Backticks are kept so the quote matches the heading verbatim; `norm()` strips them when comparing.
+
+**Decisions I made:**
+- Kept the fallback, since it only matters for titles that are not headings anywhere.
+- Did not touch `BACKLOG.md`. BL-082 is still marked `ready`, because closing it is outside the files I was allowed to change.
+
+**Not verified:** the rule is only checked against this repo's current citations. I did not check whether any heading prefix-collides with a plain quoted phrase in a way that would only show up later. No tests were run, since the script is the check and it passes. No commits were made.

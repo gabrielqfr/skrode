@@ -1,0 +1,17 @@
+BL-066 is done: the seat-colour rule now lives only in `archetypes/classify.py`, and both callers use it. Ruff is clean and the five test files you named pass (316 tests).
+
+**Files changed**
+- `src/sensei_top/archetypes/classify.py`: two new public functions. `played_colors_by_name(conn, names)` builds the per-name colour table, one query per 500 names as the route did. `played_colors_of(table, names)` reads `(colors, cards_seen)` from that table. `live_opponent_colors` keeps its name and signature and is now just those two composed.
+- `src/sensei_top/api/routes/mtgo_picks.py`: `_colors_by_played_name` and `_colors_of` are gone; it imports the two public functions. The `COLOR_ORDER` import went too, since nothing else there used it.
+- `tests/test_api.py`: the equality test is replaced (see below).
+- `tests/test_classify_seen.py`: one new test of the bulk table on 603 names.
+
+**Decisions I made**
+- **Names:** `card_colors_by_name` and `card_colors_of` already exist in `classify.py` for something else (colour identity by name form), so I used `played_colors_*` instead.
+- **`counted` flag:** dropped. The table is now `name -> colours`, and a name being in the table is what counts it.
+- **Docstrings:** the shared rule's description (land/token test before the em dash, colours unioned across printings, unreadable JSON as none, unknown name excluded under rule 4) moved onto `played_colors_by_name`. `live_opponent_colors` keeps the parts about re-running the view in Python and counting distinct names.
+- **Equality test:** replaced rather than dropped. The new test checks that the route's functions are the archetypes ones. Dropping it would have lost one case, since `test_classify_seen.py` never covered a row with unreadable colour JSON.
+- **Chunking test:** none existed, so I added one. It puts 600 colourless filler cards ahead of the cards that matter, which pushes them into the second chunk. It covers a coloured card, an unreadable-JSON card, a land, an unknown name and an empty name, and checks the result equals `live_opponent_colors`.
+- **Doc:** `docs/current-match.md` around line 520 is unchanged; its sentence is still true.
+
+**Not verified:** I didn't run the full test suite, the web checks, or anything against real data.

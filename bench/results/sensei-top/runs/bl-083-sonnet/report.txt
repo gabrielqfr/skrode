@@ -1,0 +1,13 @@
+All seven `md.deck_id IN (` queries now filter by match id through `deck_matches`. Ruff is clean and the 112 tests in the six named test files pass. I couldn't measure speed, since there is no real database, so you'll need to check the query plans.
+
+I read the diff against the brief and made no corrections, so it took 0 correction rounds. I didn't run the check as written: it also names the pin's file, and the implementer ran only the six files. The pin test is in `tests/test_guide_play.py`, and I haven't run it myself or seen it fail against a deliberately broken module.
+
+- **Rename:** `guide/play.py::_deck_matches` is now public as `deck_matches`, and its six uses in `play.py` are updated.
+- **Filter-only queries:** `guide/deck.py`, `guide/bundle.py`, both queries in `guide/field.py` that only filter, and `field.py`'s `faced_archetypes` all drop the `v_match_deck` join. Their comments are fixed.
+- **Queries that select `md.deck_id`:** `field.py` ~383, `list_diff.py` ~260 and `evidence.py` ~417 keep the join for the selected column and move only the filter. The comment at `evidence.py` ~408 is rewritten.
+- **Same rows:** `v_match_deck` is one row per match. Migration 049 defines it as `matches LEFT JOIN mtgo_match_pick ON match_id`, and `mtgo_match_pick.match_id` is the primary key.
+- **Pin test:** `test_no_module_filters_the_view_by_deck_id_against_a_set` reads every `.py` under `src/sensei_top/` and fails if any contains `md.deck_id IN (`. I put it in `tests/test_guide_play.py` because that file exists, and no test file is specific to `v_match_deck`.
+- **Import cycle (implementer's call):** `deck.py` now imports from `play.py`, which imported `DeckIdentity` from `deck.py`. The implementer moved that import in `play.py` under `TYPE_CHECKING`, with a comment saying why.
+- **Docs:** no query needed the exception, so `docs/architecture.md` is untouched.
+- **Merging the look-alikes:** I would, in a follow-up. The three queries that pick the most recently played version repeat the same `ORDER BY MAX(started_at) DESC` tie rule. I didn't merge them, as the brief said.
+- **Not run:** the full test suite.

@@ -1,0 +1,4 @@
+ tests/test_formats.py        | 20 +++++++++++++++++++-
+ tests/test_metagame_auto.py  |  4 ++--
+ tests/test_metagame_holds.py |  8 ++++----
+ 3 files changed, 25 insertions(+), 7 deletions(-)

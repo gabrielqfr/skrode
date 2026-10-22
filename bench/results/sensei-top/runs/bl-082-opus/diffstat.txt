@@ -1,0 +1,7 @@
+ docs/architecture.md       |  2 +-
+ docs/design-system.md      |  2 +-
+ docs/frontend-pages.md     |  2 +-
+ docs/frontend.md           |  2 +-
+ docs/llm.md                |  2 +-
+ scripts/check_doc_links.py | 11 +++++++----
+ 6 files changed, 12 insertions(+), 9 deletions(-)

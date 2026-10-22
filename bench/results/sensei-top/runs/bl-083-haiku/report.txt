@@ -1,0 +1,24 @@
+BL-083 is converted: all seven queries now filter on `m.match_id IN (…)`, and the pin test is in place. The brief's check commands pass. Speed is unmeasured.
+
+**Files changed**
+- `src/sensei_top/guide/deck.py`: `deck_matches` (renamed from `_deck_matches`) now lives here, plus the `identity_format` query.
+- `src/sensei_top/guide/play.py`: six uses switched to `deck_matches`.
+- `src/sensei_top/guide/field.py`: three queries (~193, ~249, ~383).
+- `src/sensei_top/guide/list_diff.py` (~260), `src/sensei_top/guide/bundle.py` (~141), `src/sensei_top/coach/evidence.py` (~417, comment rewritten).
+- `tests/test_guide_play.py`: pin test `test_no_reader_filters_the_views_deck_id_against_a_set`. It reads every `src/sensei_top` file and fails on `md.deck_id IN (`, with whitespace and case tolerated. I placed it here because `guide/play.py` already has tests; I did not add it to the `v_match_deck` tests.
+
+**Decisions I made**
+- **Moved the helper to `deck.py`.** `play.py` imports `DeckIdentity` from `deck.py`, so `deck.py` importing from `play.py` would be a cycle. The brief said the helper lives in `play.py`; this is a deviation.
+- **Dropped the `v_match_deck` join** in the four filter-only queries. `v_match_deck` has one row per match: it is `FROM matches LEFT JOIN mtgo_match_pick`, and that table's `match_id` is its primary key (`049_mtgo_match_pick.sql`). So the filter selects the same rows.
+- **No exception needed**, so `docs/architecture.md` is unchanged. BACKLOG BL-083 is not closed, since it wasn't in the file list.
+- **The three look-alikes:** I would merge the most-recent-deck lookups (`field.py`, `list_diff.py`, `evidence.py`) into one helper in a follow-up. They differ only in one selected alias. I didn't do it in this run, as instructed.
+
+**Checks**
+- `uv run ruff check .`: clean.
+- The six named test files plus the pin's file: 112 passed.
+- The pin's regex matches the old `md.deck_id IN (` shape and not the new form.
+
+**Not verified**
+- Query-plan and timing gains: no real database, not measured.
+- Full test suite: not run, per the brief's list.
+- `api/routes/meta.py`, `metrics.py` and `matches.py` also join the view on `md.deck_id`, but none uses a set filter, so I left them.

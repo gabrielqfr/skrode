@@ -1,0 +1,15 @@
+BL-082 is not done. I changed nothing, and neither check was run. Both implementer agents had Bash denied on their first call, so neither could run `uv run python scripts/check_doc_links.py` or `uv run ruff check .`. I didn't edit the files myself, because my brief says never to. That was two attempts, not correction rounds.
+
+**What the agents found by reading:**
+- `scripts/check_doc_links.py:102-107`: `title_ok` uses `h.startswith(t)` in two places, then falls back to `t in text`.
+- `scripts/check_doc_links.py:11-14`: the module docstring says "equals or prefixes a heading". It has to change along with the rule.
+- `norm()` lowercases and strips backticks, so the whole-heading rule is `t == h` in both places.
+- The `t in text` fallback only runs when no heading of any doc equals the title. I would leave it alone unless the comparison shows it lets a cut-short title through.
+
+**Not known:** which citations only pass by prefix. That list comes from running the checker under both rules, which nobody has done. I can't say what titles would change.
+
+**Decisions I made:**
+- I retried once with a fresh agent after the first denial.
+- I stopped after the second denial rather than work around it.
+
+**To continue:** allow `uv run` in this worktree for the implementer, and I'll relaunch the same brief. Alternatively, run the checker under both rules yourself and give me the failing citations. The implementer can then fix the quoted titles and the rule.

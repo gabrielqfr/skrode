@@ -1,0 +1,19 @@
+All seven queries now filter on `m.match_id IN (deck_matches(...))`. Ruff is clean and the named test files pass (112 tests, including the new pin). Nothing is committed.
+
+**Files changed**
+- `guide/play.py`: `_deck_matches` is now `deck_matches`, and its six uses are updated. Its docstring was still accurate.
+- `guide/field.py`: lines ~193 and ~249 dropped the `v_match_deck` join, since they only filtered on the deck. Line ~383 keeps the join for the `md.deck_id` it selects; only the filter moved.
+- `guide/list_diff.py` ~260 and `coach/evidence.py` ~417: same treatment as field.py ~383. I rewrote the evidence.py comment, which described the old filter.
+- `guide/deck.py` ~164 and `guide/bundle.py` ~141: the join is dropped. I updated bundle's comment.
+- `tests/test_guide_play.py`: the pin. It reads every `.py` file under `src/sensei_top/` and fails if any contains `md.deck_id IN (`. It goes here because no test file is dedicated to `v_match_deck`, and this one already tests the helper's view. Run against the last commit, the same search finds all seven old matches, so the pin would have failed there.
+- `docs/architecture.md`: unchanged. Every query took the `IN` form, so there is no exception to name.
+
+**Why results don't change:** migration 049 builds `v_match_deck` as `matches m LEFT JOIN mtgo_match_pick p` on `p.match_id`, which is that table's primary key. That gives exactly one row per match, so filtering by `md.deck_id` or by match id selects the same rows.
+
+**Decisions I made**
+- **Import cycle in `deck.py`:** `play.py` already imports `DeckIdentity` from `deck.py`, so `deck.py` imports `deck_matches` inside `identity_format` instead, with a comment. This follows the existing idiom in `archetypes/classify.py`.
+- **Merging the three look-alike queries:** I didn't. I would, in a later run: field.py and list_diff.py are identical, and evidence.py differs only in grouping on `d.deck_id`. A `latest_played_version(conn, deck_ids)` helper in `play.py` would fit.
+
+**Not verified**
+- Speed and query plans: there's no real database here and `python -c` wasn't allowed. That's left for the session.
+- The full test suite: only the named files ran.

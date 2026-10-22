@@ -1,0 +1,17 @@
+BL-066 is done: the seat-colour rule now lives once in `archetypes/classify.py`, and the MTGO picks route imports it. I read the diff against the brief and found nothing to correct, so it took no correction rounds. Nothing is committed.
+
+**Checks:** `uv run ruff check .` is clean, and the five test files in the done-when command pass (317 tests). I did not run `pnpm`, the privacy scan or the real-log verification, because the brief didn't ask for them.
+
+**Changes:**
+- **`classify.py`:** two new public functions, `seat_colors_by_name(conn, names)` and `seat_colors_of(table, names)`. `live_opponent_colors` keeps its name and signature and is now those two composed. `table/intermission.py` and the existing tests are untouched. Its docstring still has the view's arithmetic, the distinct-names difference and rule 4. The shared-rule description moved onto the new functions.
+- **`mtgo_picks.py`:** the two private functions are gone, and the route imports the public ones.
+- **`tests/test_api.py`:** the equality test is replaced by one that checks the route's names are the archetypes helpers themselves and that the old private names no longer exist.
+- **`tests/test_classify_seen.py`:** two new tests, one for unreadable colour JSON and one for the chunking on 600 names.
+- **`docs/current-match.md`:** not touched, since its sentence about `live_opponent_colors` is still true.
+
+**Decisions made without asking:**
+- **Names:** I used `seat_colors_by_name` and `seat_colors_of`, not the brief's `card_colors_by_name` and `card_colors_of`. Those two names already exist in `classify.py` with different meanings, and the route already imports one of them.
+- **`counted` flag:** dropped. The table is now `name -> frozenset of colours`, and the entry count gives the count.
+- **Equality test:** replaced, not dropped, because it was the only test that covered unreadable colour JSON. The other cases it checked (lands, tokens, an unknown name, a reprint) were already in `tests/test_classify_seen.py`.
+- **Chunk test:** none existed, so one was added. I also added the unreadable-JSON test there to keep that case covered.
+- **Query count:** `live_opponent_colors` now runs several queries when given more than 500 names. Results are unchanged, and the intermission passes one match's names.

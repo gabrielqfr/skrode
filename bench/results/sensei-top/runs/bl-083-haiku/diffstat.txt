@@ -1,0 +1,8 @@
+ src/sensei_top/coach/evidence.py  | 12 ++++++------
+ src/sensei_top/guide/bundle.py    |  5 ++---
+ src/sensei_top/guide/deck.py      | 23 +++++++++++++++++++++--
+ src/sensei_top/guide/field.py     | 10 ++++------
+ src/sensei_top/guide/list_diff.py |  4 ++--
+ src/sensei_top/guide/play.py      | 29 +++++++----------------------
+ tests/test_guide_play.py          | 18 ++++++++++++++++++
+ 7 files changed, 60 insertions(+), 41 deletions(-)

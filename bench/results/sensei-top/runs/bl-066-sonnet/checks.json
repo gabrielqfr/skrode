@@ -1,0 +1,34 @@
+{
+ "files": [
+  [
+   "M",
+   "src/sensei_top/api/routes/mtgo_picks.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/archetypes/classify.py"
+  ],
+  [
+   "M",
+   "tests/test_api.py"
+  ],
+  [
+   "M",
+   "tests/test_classify_seen.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3533 passed, 2 skipped in 642.71s (0:10:42)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_api.py",
+  "tests/test_classify_seen.py"
+ ],
+ "revert_py": {
+  "exit": 2,
+  "summary": "1 error in 1.97s"
+ },
+ "revert_ts": null
+}

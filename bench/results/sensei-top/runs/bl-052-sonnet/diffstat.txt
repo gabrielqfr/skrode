@@ -1,0 +1,7 @@
+ src/sensei_top/api/models/matches.py    |  3 +++
+ src/sensei_top/api/routes/mtgo_picks.py |  1 +
+ tests/test_api.py                       | 23 +++++++++++++++++++++++
+ web/src/locales/en/mtgo.json            |  3 ++-
+ web/src/locales/pt-BR/mtgo.json         |  3 ++-
+ web/src/views/MtgoPicksView.tsx         | 11 ++++++++---
+ 6 files changed, 39 insertions(+), 5 deletions(-)

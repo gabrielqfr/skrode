@@ -1,0 +1,22 @@
+BL-039 is implemented and passes both required checks, with no correction rounds. I read the diff against the brief. It touches only `cli.py` and `tests/test_llm.py`, and every comment and docstring is still true.
+
+**Files changed**
+- `src/sensei_top/cli.py`:
+  - A new `_mode_note()` helper returns `""` when `sys.platform == "win32"` and `" (mode 600)"` otherwise.
+  - All five messages now use it: the `_store_key` file branch, `_written`, and the backup-settings and config lines in `cmd_config`. Their text on other platforms is unchanged.
+  - The `path.chmod(0o600)` call is unchanged.
+  - The `_store_key` docstring now says "else the file (mode 600 off Windows), saying why."
+- `tests/test_llm.py`: a new test, `test_config_set_mtgo_dir_flag_leaves_out_mode_600_on_windows`, sits after the existing one. It patches `sys.platform` to `"win32"`, runs `config --set-mtgo-dir`, and asserts the line ends without " (mode 600)". The existing assertion near line 1292 is untouched.
+
+**Checks**
+- `uv run ruff check .` is clean.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_llm.py tests/test_cli.py` gives 157 passed.
+- The implementer made the helper always return " (mode 600)" and the new test failed. It then restored the helper. I did not repeat this myself.
+
+**Decisions I made**
+- I patched `sys.platform` itself instead of the helper, the way `tests/test_ingest.py` already does.
+- The Windows test covers only the `--set-mtgo-dir` message. The other four messages use the same helper but have no Windows assertion of their own.
+- I left `docs/llm.md` and `BACKLOG.md` alone. `docs/llm.md` says `chmod 600`, which is still true. Closing BL-039 in the backlog is left to you.
+
+**Could not verify**
+- Behaviour on a real Windows machine. The test checks only the message text under a patched platform.

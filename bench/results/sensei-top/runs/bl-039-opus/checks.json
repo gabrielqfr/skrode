@@ -1,0 +1,25 @@
+{
+ "files": [
+  [
+   "M",
+   "src/sensei_top/cli.py"
+  ],
+  [
+   "M",
+   "tests/test_llm.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3532 passed, 2 skipped in 492.07s (0:08:12)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_llm.py"
+ ],
+ "revert_py": {
+  "exit": 1,
+  "summary": "1 failed, 95 passed in 2.91s"
+ },
+ "revert_ts": null
+}

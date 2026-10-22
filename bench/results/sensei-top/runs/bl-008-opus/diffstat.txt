@@ -1,0 +1,4 @@
+ web/src/components/guide/WriteAndExport.tsx | 36 ++++++++++++++++++++++-------
+ web/src/locales/en/decks.json               |  3 ++-
+ web/src/locales/pt-BR/decks.json            |  3 ++-
+ 3 files changed, 32 insertions(+), 10 deletions(-)

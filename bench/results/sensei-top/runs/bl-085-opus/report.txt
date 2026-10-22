@@ -1,0 +1,15 @@
+BL-085 is done: `pre_total_scoped` now calls `_classified_deck_total` instead of writing its query out inline. Ruff is clean and the three named test files pass (71 tests).
+
+**File changed:** only `src/sensei_top/guide/field.py`. No test needed changing.
+
+- **`build_field`:** the pre-reset filter (format plus `e.event_date <= ?`) is now defined once, in `pre_where` and `pre_params`. The pre-reset per-archetype count query and the `_classified_deck_total(conn, pre_where, pre_params)` call both use it. Same SQL and parameters as before, so every number stays the same.
+- **`_classified_deck_total` docstring:** no longer calls `pre_total_scoped` a copy. It now lists `build_field` as a fourth caller, notes that its window is `e.event_date <= ?` rather than `field_window`, and adds `build_field`'s grouping to the list of count queries kept separate.
+
+**Decisions I made myself:**
+- I didn't widen the signature. `_classified_deck_total` already takes any `where` and `params`, so it could take the date bound as it is.
+- I also pointed the pre-reset per-archetype count query at the same `pre_where` and `pre_params`, so the pre-reset filter is written once rather than twice. This goes a little past what the item asks; its SQL text is unchanged.
+- The module's opening docstring already names `_classified_deck_total` and needed no change.
+
+**Not done or not verified:**
+- The `BACKLOG.md` entry for BL-085 is still `ready`. That file was outside the ones I could touch, so closing the item is left to you.
+- I didn't run the full test suite, the web checks or a check against a real database (not allowed by the rules).

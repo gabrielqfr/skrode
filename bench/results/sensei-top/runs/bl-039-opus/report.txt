@@ -1,0 +1,20 @@
+BL-039 is fixed: on Windows the five config-write messages no longer claim "(mode 600)", and everywhere else they print exactly as before. Both checks pass.
+
+**Files changed**
+- `src/sensei_top/cli.py`: added a small helper, `_mode_600()`, next to the code that writes the file. It returns `" (mode 600)"` except when `sys.platform == "win32"`, where it returns nothing. The five messages use it in place of the literal text: the `_store_key` file branch, `_written`, and the backup-settings and config lines in `cmd_config`. The `path.chmod(0o600)` call is unchanged.
+- `tests/test_llm.py`: added `test_config_write_message_drops_mode_600_on_windows` after the existing `--set-mtgo-dir` test, which I didn't touch. It sets `sys.platform` to `"win32"`, runs the same `config --set-mtgo-dir` command, and checks that it prints the same line ending in `.` straight after the path, with no "mode 600" anywhere in the output.
+
+**Checks**
+- `uv run ruff check .`: clean.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_llm.py tests/test_cli.py`: 157 passed.
+- I made the helper always return `" (mode 600)"` and ran the new test: it failed. I then restored the helper, and the new test and the original assertion both pass again.
+
+**Decisions I made**
+- The `_store_key` docstring now says "else the file (chmod 600)" instead of "(mode 600)". It is the same length and true on both platforms, since the call runs everywhere.
+- I left `docs/llm.md:156` ("chmod 600") alone because it is still true. The `cmd_config` docstring's "chmods it 600" is also still true, so it is unchanged.
+- The test asserts the whole line including the trailing `.\n`, so that `" (mode 600)"` coming back in that spot makes it fail.
+
+**Not verified**
+- I haven't run it on a real Windows machine; the test only fakes `sys.platform` on Linux.
+- No test covers the other four messages on Windows. They go through the same helper.
+- I didn't run the full test suite or the frontend checks, since the task only asked for these two files.

@@ -1,0 +1,19 @@
+BL-085 is done: `build_field`'s `pre_total_scoped` now calls `_classified_deck_total` instead of repeating its query inline.
+
+**Files changed:** only `src/sensei_top/guide/field.py`. I did not touch `tests/test_guide_field.py`, and I did not change `BACKLOG.md`.
+
+**The change:**
+- No signature change was needed. `_classified_deck_total` already takes a caller-built `where` clause and params, so `build_field` passes `"e.format = ? AND e.event_date <= ?"` with `[fmt, reset.date]`. The SQL is the same count over the same rows as before.
+- I updated `_classified_deck_total`'s docstring. It named `pre_total_scoped` as the one inline copy, and it listed three callers. It now lists the four callers, including `build_field`, and notes that the pre-reset window uses `<=` where `field_window` uses `>=`.
+
+**Decisions I made myself:**
+- I kept `where` as a caller-built clause rather than adding a date parameter. That matches how the other callers already work.
+- I left the `pre_rows` per-archetype query inline. The item only covers the denominator.
+
+**Checks:**
+- `uv run ruff check .`: all checks passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_guide_field.py tests/test_guide_bundle.py tests/test_coach_evidence.py`: 71 passed.
+
+**Not verified:**
+- I did not run the full suite or the frontend checks, since the item asked only for these three files.
+- I did not run against a real database. The existing tests cover the pre-reset path only through these files, so an unexpected change in the pre-reset share would show up only in those tests.

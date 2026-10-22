@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="534" viewBox="0 0 760 534" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
 <title id="title">Claude spend saved vs Sonnet alone, by batch</title>
-<desc id="desc">Connected: Sonnet + Haiku 5.5 subagent +24%, skrode + DeepSeek V4.1 Flash +15%, skrode + Bonsai 2 27B (local GPU) −1%, Haiku 5.5 alone +90%, Opus 5.5 + Haiku 5.5 subagent not run; Harder: Sonnet + Haiku 5.5 subagent +55%, skrode + DeepSeek V4.1 Flash −3%, skrode + Bonsai 2 27B (local GPU) −61%, Haiku 5.5 alone +86%, Opus 5.5 + Haiku 5.5 subagent −2%; Smaller: Sonnet + Haiku 5.5 subagent +8%, skrode + DeepSeek V4.1 Flash −14%, skrode + Bonsai 2 27B (local GPU) not run, Haiku 5.5 alone +91%, Opus 5.5 + Haiku 5.5 subagent not run.</desc>
+<desc id="desc">Connected: Sonnet + Haiku 5.5 subagent +24%, skrode + DeepSeek V4.1 Flash +15%, skrode + Bonsai 2 27B (local GPU) −1%, Haiku 5.5 alone +90%, Opus 5.5 + Haiku 5.5 subagent not run on this batch; Harder: Sonnet + Haiku 5.5 subagent +55%, skrode + DeepSeek V4.1 Flash −3%, skrode + Bonsai 2 27B (local GPU) −61%, Haiku 5.5 alone +86%, Opus 5.5 + Haiku 5.5 subagent −2%; Smaller: Sonnet + Haiku 5.5 subagent +8%, skrode + DeepSeek V4.1 Flash −14%, skrode + Bonsai 2 27B (local GPU) not run on this batch, Haiku 5.5 alone +91%, Opus 5.5 + Haiku 5.5 subagent not run on this batch.</desc>
 <rect width="760" height="534" fill="#1a1a19"/>
 <text x="24.0" y="32.0" fill="#f0efec" font-size="16" font-weight="600" text-anchor="start">Claude spend saved vs Sonnet 5.5 alone</text>
 <text x="24.0" y="52.0" fill="#c3c2b7" font-size="13" font-weight="400" text-anchor="start">Median a run, as a share of Sonnet's median cost on the same batch. Sonnet orchestrates the skrode rows</text>
@@ -48,7 +48,8 @@
 <text x="448.4" y="187.5" fill="#f0efec" font-size="12" font-weight="400" text-anchor="end">−1%</text>
 <path d="M458.0,194.0H704.7Q708.7,194.0 708.7,198.0V208.0Q708.7,212.0 704.7,212.0H458.0Z" fill="#c98500"/>
 <text x="714.7" y="207.5" fill="#f0efec" font-size="12" font-weight="400" text-anchor="start">+90%</text>
-<text x="466.0" y="227.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<rect x="466.5" y="217.5" width="11" height="11" rx="2" fill="none" stroke="#d55181"/>
+<text x="484.0" y="227.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">Opus + Haiku subagent: Harder only</text>
 <text x="24.0" y="301.0" fill="#f0efec" font-size="13" font-weight="600" text-anchor="start">Harder</text>
 <text x="24.0" y="318.0" fill="#898781" font-size="12" font-weight="400" text-anchor="start">b3, 5 tasks</text>
 <path d="M458.0,254.0H605.9Q609.9,254.0 609.9,258.0V268.0Q609.9,272.0 605.9,272.0H458.0Z" fill="#3987e5"/>
@@ -67,8 +68,10 @@
 <text x="486.9" y="387.5" fill="#f0efec" font-size="12" font-weight="400" text-anchor="start">+8%</text>
 <path d="M458.0,394.0H423.6Q419.6,394.0 419.6,398.0V408.0Q419.6,412.0 423.6,412.0H458.0Z" fill="#d95926"/>
 <text x="413.6" y="407.5" fill="#f0efec" font-size="12" font-weight="400" text-anchor="end">−14%</text>
-<text x="466.0" y="427.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<rect x="466.5" y="417.5" width="11" height="11" rx="2" fill="none" stroke="#199e70"/>
+<text x="484.0" y="427.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">Bonsai: Connected and Harder only</text>
 <path d="M458.0,434.0H707.4Q711.4,434.0 711.4,438.0V448.0Q711.4,452.0 707.4,452.0H458.0Z" fill="#c98500"/>
 <text x="717.4" y="447.5" fill="#f0efec" font-size="12" font-weight="400" text-anchor="start">+91%</text>
-<text x="466.0" y="467.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">not run</text>
+<rect x="466.5" y="457.5" width="11" height="11" rx="2" fill="none" stroke="#d55181"/>
+<text x="484.0" y="467.5" fill="#898781" font-size="12" font-weight="400" text-anchor="start">Opus + Haiku subagent: Harder only</text>
 </svg>

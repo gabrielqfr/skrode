@@ -1,0 +1,45 @@
+{
+ "files": [
+  [
+   "M",
+   "src/sensei_top/coach/evidence.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/bundle.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/deck.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/field.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/list_diff.py"
+  ],
+  [
+   "M",
+   "src/sensei_top/guide/play.py"
+  ],
+  [
+   "M",
+   "tests/test_guide_play.py"
+  ]
+ ],
+ "ruff_exit": 0,
+ "pytest_exit": 0,
+ "pytest_summary": "3529 passed, 2 skipped in 358.57s (0:05:58)",
+ "web": null,
+ "desktop": null,
+ "tests_changed": [
+  "tests/test_guide_play.py"
+ ],
+ "revert_py": {
+  "exit": 1,
+  "summary": "1 failed, 14 passed in 4.49s"
+ },
+ "revert_ts": null
+}

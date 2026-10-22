@@ -1,0 +1,21 @@
+I added the download button to the deck guide's Export card. All three checks pass, but I could not click the button in a browser.
+
+**Files changed** (only the three allowed):
+- `web/src/components/guide/WriteAndExport.tsx`: a `download` function copied from the RCQ guide's `CarryCard` (Blob, anchor, revoke after one second). A secondary "Download .md" button now sits beside the copy button, and both are in one flex row (`mb-2 flex flex-wrap items-center gap-3`). Both are `size="sm"` to match the existing copy button. The button is disabled while the Markdown text is empty.
+- `web/src/locales/en/decks.json`: new key `decks.guide.export.download` = `"Download .md"`.
+- `web/src/locales/pt-BR/decks.json`: the same key = `"Baixar .md"`.
+
+**Checks**
+- `pnpm lint`: no findings.
+- `pnpm test`: 41 files, 758 tests passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_i18n.py tests/test_site.py`: 251 passed.
+
+**Decisions I made**
+- **File name is plain `deck-guide.md`.** The only date in the component is `response?.authored_at`, which is when the written guide was saved. The Markdown endpoint returns only `{ markdown }` and builds the guide's numbers when the page asks for it, so that date would label a file whose numbers are today's with an older day. The brief said not to add a prop or a fetch, so I left the date out.
+- The button lives inside the branch where the Markdown has loaded, like the copy button. So it only appears once the Markdown is shown and loaded, and the disabled state only matters if the text comes back empty.
+
+**Not verified**
+- I could not click the button in a browser, so I haven't confirmed that a file actually saves or what it contains.
+- I did not run `pnpm build`; it wasn't in the done-when list.
+
+There's no commit and no branch change.

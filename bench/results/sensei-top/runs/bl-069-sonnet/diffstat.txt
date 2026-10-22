@@ -1,0 +1,27 @@
+ docs/architecture.md                     |  2 +-
+ docs/coach.md                            | 51 +++++++++++++-------------
+ docs/guide.md                            | 61 +++++++++++++++-----------------
+ docs/opponent-deck.md                    | 26 +++++++-------
+ docs/review.md                           | 44 +++++++++++------------
+ src/sensei_top/api/routes/mtgo_picks.py  | 12 +++----
+ src/sensei_top/archetypes/classify.py    | 58 +++++++++++++++---------------
+ src/sensei_top/archetypes/corpus.py      |  2 +-
+ src/sensei_top/coach/evidence.py         | 36 +++++++++----------
+ src/sensei_top/guide/field.py            |  4 +--
+ src/sensei_top/guide/list_diff.py        |  8 ++---
+ src/sensei_top/guide/rcq.py              | 14 ++++----
+ src/sensei_top/metagame/classify_meta.py | 18 +++++-----
+ src/sensei_top/review/leaks.py           | 22 ++++++------
+ src/sensei_top/review/narrative.py       | 12 +++----
+ src/sensei_top/review/snapshot.py        | 28 +++++++--------
+ src/sensei_top/table/intermission.py     | 10 +++---
+ tests/test_classify.py                   | 28 +++++++--------
+ tests/test_classify_seen.py              |  6 ++--
+ tests/test_coach_evidence.py             | 10 +++---
+ tests/test_coach_narrative.py            |  2 +-
+ tests/test_corpus_naming.py              | 34 +++++++++---------
+ tests/test_guide_list_diff.py            |  2 +-
+ tests/test_leaks.py                      | 16 ++++-----
+ tests/test_review.py                     |  2 +-
+ tests/test_review_mtgo.py                |  2 +-
+ 26 files changed, 253 insertions(+), 257 deletions(-)

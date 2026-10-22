@@ -1,0 +1,24 @@
+I removed the draft-sharing code, but one required check fails: `tests/test_doc_refs.py`. Every other check passes.
+
+**The failure** is in `BACKLOG.md`'s own BL-062 entry (lines 930 and 938), which names `SharedDraft`, `DraftPayload` and `deleteContributions`. Those no longer exist. Fixing it means closing BL-062 in `BACKLOG.md`, which isn't on my list of files, so I stopped and left it for you.
+
+**Checks:**
+- `ruff check .`: clean.
+- `tests/test_site.py` plus the other doc-refs tests: 160 passed, 1 failed (the one above).
+- `web/`: `pnpm lint` clean (no output, exit 0), `tsc -b` clean, `pnpm test` 758 passed.
+- `desktop/`: `pnpm typecheck` clean, `pnpm test` 342 passed.
+
+**Files changed:**
+- **Deleted:** `components/settings/SharingSection.tsx` and the whole `components/sharing/` folder.
+- **Edited:** `bridge.ts`, `bridge.test.ts`, `lib/sampleShell.ts`, `views/SettingsView.tsx` and `views/SurfacesView.tsx`.
+- **Catalogues:** in both `en` and `pt-BR`, I deleted `settings.sections.draftData`, the `settings.sharing` block and the `prompts.sharing` block. A grep found no other reader, and no string was reworded.
+- **Desktop:** `preload.ts`, `settings.ts` and `settings.test.ts`.
+- **Docs:** in `docs/frontend.md`, the table row, the `lastDraft` paragraph, the Draft data item, the `components/sharing/` paragraphs, the desktop-shell sentence and the `/design/surfaces` description.
+
+**Decisions I made:**
+- I removed all six draft functions, not just `deleteContributions`: `setSharing`, `payloadOf`, `sharedState`, `unshare` and `newInstallation` too. A grep showed nothing outside draft sharing uses them, so `deleteContributions` took no live feature with it.
+- In `sampleShell.ts` I also removed the three "Sharing" samples, the invented draft payload and its card-name helpers, and the now-unused `afterAWhileWith`.
+- In `frontend.md`, the "How a form saves" examples ("Delete them", "Keep them") came from Draft data. I replaced them with the Backup section's real labels ("Keep what is here", "Restore from the file").
+- I kept the line that the Overlay section went with the pivot, now as a sentence on its own.
+
+**Not verified:** I didn't look at `/design/surfaces` in a browser or run the Electron shell.

@@ -1,0 +1,5 @@
+ src/sensei_top/api/routes/mtgo_picks.py | 53 ++-------------------
+ src/sensei_top/archetypes/classify.py   | 84 +++++++++++++++++++++------------
+ tests/test_api.py                       | 36 ++++----------
+ tests/test_classify_seen.py             | 33 +++++++++++++
+ 4 files changed, 101 insertions(+), 105 deletions(-)

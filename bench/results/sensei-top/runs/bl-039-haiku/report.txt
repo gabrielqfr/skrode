@@ -1,0 +1,22 @@
+BL-039 is done: on Windows the five config messages no longer say "(mode 600)", and everywhere else the output is unchanged. Both required checks pass.
+
+**Files changed**
+- `src/sensei_top/cli.py`: added `_mode_note()`, which returns `" (mode 600)"` everywhere except `sys.platform == "win32"`, where it returns `""`. The five messages now call it. The `chmod` call is untouched. The `_store_key` docstring now reads "(mode 600 off Windows)".
+- `tests/test_llm.py`: added `import sys` and `test_config_set_mtgo_dir_flag_leaves_out_mode_600_on_windows`. It monkeypatches `sys.platform` to `"win32"`, runs the same `config --set-mtgo-dir` command, and asserts the line without the parenthesis and that "(mode 600)" is absent. The existing assertion near line 1292 is untouched.
+
+**Checks**
+- `uv run ruff check .`: all checks passed.
+- `TMPDIR=/var/tmp uv run pytest -q tests/test_llm.py tests/test_cli.py`: 157 passed.
+- Revert check: I made the helper always return `" (mode 600)"` and ran the new test. It failed. I then restored the helper, and the suites passed again.
+
+**Decisions I made**
+- Helper name `_mode_note`, placed just above `_written`. It has a short docstring, matching the file's comment style.
+- Docstring wording: "(mode 600 off Windows)". It adds two words over the old text, to keep the claim true on both platforms.
+- `docs/llm.md` line 156 ("`chmod 600`") is still true because the `chmod` call still happens, so I did not change it.
+- The `_write_config_tables` docstring ("chmods it 600") is still accurate, so I left it.
+- No Windows-specific wording was added, as the brief asked.
+
+**Not verified**
+- I did not run on Windows. The test only simulates `sys.platform`, so it checks the branch logic, not what `chmod` does on a real Windows filesystem.
+- I did not run the full pytest suite or the dashboard checks, since the brief named only the two test files.
+- I made no commits or branch changes.
