@@ -32,6 +32,12 @@ ROWS = (
     ("claude-haiku", "Haiku 5.5 alone"),
     ("claude-opus-haiku-subagent", "Opus 5.5 + Haiku 5.5 subagent"),
 )
+# What an empty slot says, naming where the row did run; a bare "not run" did not say which row
+# the gap belonged to. A row missing here leaves its empty slots blank.
+ONLY_ON = {
+    "router-bonsai": "Bonsai: Connected and Harder only",
+    "claude-opus-haiku-subagent": "Opus + Haiku subagent: Harder only",
+}
 # Categorical slots 1-5 of the dataviz reference palette, validated for these surfaces. Rows
 # added later take the next slot so the earlier rows keep their colours.
 THEMES = {
@@ -125,7 +131,7 @@ def render(shares: dict[str, dict[str, float]], theme: dict) -> str:
         '<desc id="desc">' + "; ".join(
             f"{label}: " + ", ".join(
                 f"{row_label} {_percent(shares[batch][row])}" if row in shares[batch]
-                else f"{row_label} not run"
+                else f"{row_label} not run on this batch"
                 for row, row_label in ROWS
             )
             for batch, label, _ in BATCHES
@@ -157,7 +163,11 @@ def render(shares: dict[str, dict[str, float]], theme: dict) -> str:
             baseline = y + BAR / 2 + 4.5
             share = shares[batch].get(row)
             if share is None:
-                out.append(_text(zero + 8, baseline, "not run", theme["muted"], 12))
+                # A hollow swatch in the row's colour ties the note to its legend entry.
+                if row in ONLY_ON:
+                    out.append(f'<rect x="{zero + 8.5:.1f}" y="{y + 3.5:.1f}" width="11" '
+                               f'height="11" rx="2" fill="none" stroke="{colour}"/>')
+                    out.append(_text(zero + 26, baseline, ONLY_ON[row], theme["muted"], 12))
             else:
                 x1 = zero + share * 100 * scale
                 out.append(f'<path d="{_bar_path(zero, x1, y, BAR)}" fill="{colour}"/>')

@@ -27,7 +27,7 @@ measure, and every row clears nearly all of them. The full results, method, limi
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/bench-saved-dark.svg">
-  <img alt="Claude spend saved vs Sonnet alone, by batch. Connected tasks: Sonnet + Haiku subagent +24%, DeepSeek Flash +15%, Bonsai -1%, Haiku alone +90%. Harder tasks: Sonnet + Haiku subagent +55%, DeepSeek Flash -3%, Bonsai -61%, Haiku alone +86%, Opus + Haiku subagent -2%. Smaller tasks: Sonnet + Haiku subagent +8%, DeepSeek Flash -14%, Haiku alone +91%; Bonsai and Opus not run." src="docs/img/bench-saved-light.svg">
+  <img alt="Claude spend saved vs Sonnet alone, by batch. Connected tasks: Sonnet + Haiku subagent +24%, DeepSeek Flash +15%, Bonsai -1%, Haiku alone +90%. Harder tasks: Sonnet + Haiku subagent +55%, DeepSeek Flash -3%, Bonsai -61%, Haiku alone +86%, Opus + Haiku subagent -2%. Smaller tasks: Sonnet + Haiku subagent +8%, DeepSeek Flash -14%, Haiku alone +91%. Bonsai ran on the connected and harder tasks only, Opus + Haiku subagent on the harder tasks only." src="docs/img/bench-saved-light.svg">
 </picture>
 
 `bench/chart.py` draws this chart from `bench/results/`.
