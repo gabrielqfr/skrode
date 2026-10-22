@@ -215,12 +215,12 @@ The per-request sampling and reasoning effort come from `profiles/bonsai2-27b.ya
 ### What ran
 
 The batches ran on Claude Code 2.1.300 and 2.1.301 (each run's `row.out` records which), with
-skrode at `778ce18` (before the rename in `8c82b13`, which changed only names).
-The modules a run uses are unchanged since `93ff9ec`. The runs predate two changes: `benchprep`
+skrode at `9ab6314` (before the rename in `20e03e0`, which changed only names).
+The modules a run uses are unchanged since `f46a2f5`. The runs predate two changes: `benchprep`
 now fetches the tests from `commit` instead of a stored copy, and `check.sh` reads them from
 `HIDDEN_DIR`. Every task's rebuilt base commit is identical, SHA for SHA, to the one its runs
 used.
 
 The two later rows (`claude-haiku`, `claude-opus-haiku-subagent`) ran on 21 October on Claude
 Code 2.1.306, on tasks freshly prepared by the current `benchprep`, with `benchrun` at
-`a1e11a8`.
+`428ba3e`.

@@ -16,7 +16,7 @@
   "summary": "Added slugify() to router/slug.py: lowercases, folds accents with unicodedata NFKD, collapses runs of non-alphanumerics to one hyphen and trims hyphens at both ends. The first attempt kept trailing hyphens; the retry fixed the trim. Added tests/test_slug.py covering accents, empty input, repeated separators and a 60-character limit.",
   "concerns": ["The 60-character limit cuts mid-word; the task did not say whether to cut at a hyphen."],
   "branch": "local-agent/j-20261014-a1b2c3",
-  "base_commit": "da00a7f",
+  "base_commit": "c493805",
   "model": "bonsai2-27b",
   "local_tokens": {"prompt": 48210, "completion": 6120, "reasoning": 3904},
   "wall_s": 412.5,

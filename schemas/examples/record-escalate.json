@@ -22,7 +22,7 @@
   "summary": "Rewrote split_fields() in router/parse.py to handle quoted fields. Quoted commas are still split: the parser does not track whether it is inside quotes across the separator check.",
   "concerns": [],
   "branch": "local-agent/j-20261014-d4e5f6",
-  "base_commit": "da00a7f",
+  "base_commit": "c493805",
   "model": "bonsai2-27b",
   "local_tokens": {"prompt": 112400, "completion": 15830},
   "wall_s": 1104.0,

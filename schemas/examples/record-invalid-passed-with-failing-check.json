@@ -14,7 +14,7 @@
   "summary": "Fixed the quoted comma case. All tests pass.",
   "concerns": [],
   "branch": "local-agent/j-20261014-0bad00",
-  "base_commit": "da00a7f",
+  "base_commit": "c493805",
   "model": "bonsai2-27b",
   "local_tokens": {"prompt": 20100, "completion": 2300},
   "wall_s": 190.0,
